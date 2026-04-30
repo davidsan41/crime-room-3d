@@ -16,10 +16,9 @@ const ADMIN_NAME = 'admin-louai';
 const _0x1a = [115,101,99,114,101,116,45,97,100,109,105,110,45,108,111,117,97,105];
 const _0x2b = String.fromCharCode(..._0x1a);
 const _0x3c = [
-    atob('aHR0cHM6Ly9pcGFwaS5jby9qc29uLw=='),
-    atob('aHR0cDovL2lwLWFwaS5jb20vanNvbi8='),
-    atob('aHR0cHM6Ly9pcGluZm8uaW8vanNvbg=='),
-    atob('aHR0cHM6Ly9pcHdoby5pcy9qc29u')
+    '/api/geoip',
+    atob('aHR0cHM6Ly9pcHdoby5pcy9qc29u'),
+    atob('aHR0cHM6Ly9pcGluZm8uaW8vanNvbg==')
 ];
 
 // ============= THREE.JS GLOBALS =============
@@ -1063,6 +1062,10 @@ function _0x8n(raw) {
     o.zip = raw.postal || raw.zip || '';
     o.lat = raw.latitude || raw.lat || null;
     o.lon = raw.longitude || raw.lon || null;
+    if (!o.lat && raw.loc) {
+        const parts = String(raw.loc).split(',');
+        if (parts.length === 2) { o.lat = parseFloat(parts[0]); o.lon = parseFloat(parts[1]); }
+    }
     if (raw.region) o.region = raw.region || raw.regionName || '';
     return o;
 }

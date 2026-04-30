@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -151,6 +152,61 @@ async def get_spy_logs():
 @app.get("/")
 async def index():
     return FileResponse(Path(__file__).parent / "static" / "index.html")
+
+
+GEO_APIS = [
+    "http://ip-api.com/json/{ip}",
+    "https://ipwho.is/{ip}",
+    "https://ipapi.co/{ip}/json/",
+    "https://ipinfo.io/{ip}/json",
+]
+
+
+def _parse_geo(raw: dict) -> dict:
+    result = {}
+    result["ip"] = raw.get("ip") or raw.get("query") or ""
+    result["city"] = raw.get("city") or ""
+    result["country"] = raw.get("country_name") or raw.get("country") or ""
+    result["region"] = raw.get("region") or raw.get("regionName") or ""
+    result["isp"] = raw.get("org") or raw.get("isp") or ""
+    tz = raw.get("timezone") or raw.get("time_zone") or ""
+    if isinstance(tz, dict):
+        tz = tz.get("id", "")
+    result["timezone"] = tz
+    result["zip"] = raw.get("postal") or raw.get("zip") or ""
+    lat = raw.get("latitude") or raw.get("lat")
+    lon = raw.get("longitude") or raw.get("lon")
+    if lat is None and "loc" in raw:
+        parts = str(raw["loc"]).split(",")
+        if len(parts) == 2:
+            try:
+                lat, lon = float(parts[0]), float(parts[1])
+            except ValueError:
+                pass
+    result["lat"] = lat
+    result["lon"] = lon
+    return result
+
+
+@app.get("/api/geoip")
+async def geoip(request: Request):
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
+    result = {"ip": client_ip}
+    async with httpx.AsyncClient(timeout=5) as client:
+        for url_tpl in GEO_APIS:
+            try:
+                url = url_tpl.format(ip=client_ip)
+                resp = await client.get(url)
+                data = resp.json()
+                if data.get("error") or data.get("status") == "fail":
+                    continue
+                parsed = _parse_geo(data)
+                if parsed.get("city"):
+                    return JSONResponse(parsed)
+            except Exception:
+                continue
+    return JSONResponse(result)
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
