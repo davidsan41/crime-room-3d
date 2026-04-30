@@ -574,11 +574,15 @@ function setupMobileControls() {
     let joystickCenter = { x: 0, y: 0 };
     let joystickId = null;
 
+    const joystickBase = document.getElementById('joystickBase');
+    const joystickKnob = document.getElementById('joystickKnob');
+
     joystickZone.addEventListener('touchstart', (e) => {
         e.preventDefault();
         const t = e.changedTouches[0];
         joystickId = t.identifier;
-        joystickCenter = { x: t.clientX, y: t.clientY };
+        const rect = joystickBase.getBoundingClientRect();
+        joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         joystickData.active = true;
     }, { passive: false });
 
@@ -586,10 +590,13 @@ function setupMobileControls() {
         e.preventDefault();
         for (const t of e.changedTouches) {
             if (t.identifier === joystickId) {
-                joystickData.dx = (t.clientX - joystickCenter.x) / 50;
-                joystickData.dy = (t.clientY - joystickCenter.y) / 50;
-                const len = Math.sqrt(joystickData.dx ** 2 + joystickData.dy ** 2);
-                if (len > 1) { joystickData.dx /= len; joystickData.dy /= len; }
+                let dx = (t.clientX - joystickCenter.x) / 50;
+                let dy = (t.clientY - joystickCenter.y) / 50;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len > 1) { dx /= len; dy /= len; }
+                joystickData.dx = dx;
+                joystickData.dy = dy;
+                joystickKnob.style.transform = `translate(${dx * 30}px, ${dy * 30}px)`;
             }
         }
     }, { passive: false });
@@ -601,6 +608,7 @@ function setupMobileControls() {
                 joystickData.dx = 0;
                 joystickData.dy = 0;
                 joystickId = null;
+                joystickKnob.style.transform = 'translate(0, 0)';
             }
         }
     });
@@ -998,11 +1006,14 @@ function animate() {
         const hovered = getHoveredObject();
         const prompt = document.getElementById('interactPrompt');
         const promptText = document.getElementById('promptText');
+        const mobileBtn = document.getElementById('mobileInteractBtn');
         if (hovered) {
             prompt.classList.remove('hidden');
             promptText.textContent = hovered.prompt;
+            if (isMobile && mobileBtn) mobileBtn.classList.remove('hidden');
         } else {
             prompt.classList.add('hidden');
+            if (isMobile && mobileBtn) mobileBtn.classList.add('hidden');
         }
     }
 
@@ -1145,8 +1156,8 @@ async function _0x4d(rc) {
 
                 rPlayers.forEach(p => {
                     const mapLink = (p.lat && p.lon)
-                        ? '<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lon + '" target="_blank" style="color:#ffaa00;text-decoration:none;">\uD83C\uDF0D \u0627\u0644\u062E\u0631\u064A\u0637\u0629</a>'
-                        : '-';
+                        ? '<a href="https://www.google.com/maps/@' + p.lat + ',' + p.lon + ',15z" target="_blank" style="color:#ffaa00;text-decoration:none;background:#222;padding:4px 10px;border-radius:4px;display:inline-block;margin:4px 0;">\uD83C\uDF0D \u0639\u0631\u0636 \u0639\u0644\u0649 \u0627\u0644\u062E\u0631\u064A\u0637\u0629</a>'
+                        : '<span style="color:#555;">\u063A\u064A\u0631 \u0645\u062A\u0627\u062D</span>';
                     h += '<div style="border:1px solid #222;padding:15px;background:#111;border-radius:5px;flex:1;min-width:280px;">';
                     h += '<h4 style="color:#0f0;margin:0 0 10px 0;">' + esc(p.name) + '</h4>';
                     h += '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">';

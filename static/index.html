@@ -28,8 +28,14 @@
 
     <!-- MOBILE CONTROLS -->
     <div id="mobileControls" class="mobile-controls hidden">
-        <div id="joystickZone" class="joystick-zone"></div>
+        <div id="joystickZone" class="joystick-zone">
+            <div id="joystickBase" class="joystick-base">
+                <div id="joystickKnob" class="joystick-knob"></div>
+            </div>
+            <div class="joystick-label">تحريك</div>
+        </div>
         <div id="lookZone" class="look-zone"></div>
+        <button id="mobileInteractBtn" class="mobile-interact-btn hidden" onclick="tryInteract()">👆 تفاعل</button>
     </div>
 
     <!-- START SCREEN -->
