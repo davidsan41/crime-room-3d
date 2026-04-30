@@ -15,32 +15,20 @@ DATA_DIR = Path("/data") if os.path.isdir("/data") else Path(__file__).parent / 
 DATA_DIR.mkdir(exist_ok=True)
 RESULTS_FILE = DATA_DIR / "results.json"
 PLAYERS_INFO_FILE = DATA_DIR / "players_info.json"
+SPYLOGS_FILE = DATA_DIR / "spylogs.json"
 
 
-def load_results() -> list[dict]:
-    if RESULTS_FILE.exists():
+def _load(path: Path) -> list[dict]:
+    if path.exists():
         try:
-            return json.loads(RESULTS_FILE.read_text(encoding="utf-8"))
+            return json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, IOError):
             return []
     return []
 
 
-def save_results(results: list[dict]) -> None:
-    RESULTS_FILE.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def load_players_info() -> list[dict]:
-    if PLAYERS_INFO_FILE.exists():
-        try:
-            return json.loads(PLAYERS_INFO_FILE.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError):
-            return []
-    return []
-
-
-def save_players_info(info: list[dict]) -> None:
-    PLAYERS_INFO_FILE.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save(path: Path, data: list[dict]) -> None:
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class ResultIn(BaseModel):
@@ -62,11 +50,25 @@ class PlayerInfoIn(BaseModel):
     city: Optional[str] = None
     country: Optional[str] = None
     isp: Optional[str] = None
+    timezone: Optional[str] = None
+    zip: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    os: Optional[str] = None
+    deviceModel: Optional[str] = None
+    battery: Optional[str] = None
+
+
+class SpyLogIn(BaseModel):
+    name: str
+    roomNumber: str
+    puzzle: str
+    answer: str
 
 
 @app.post("/api/results")
 async def create_result(result: ResultIn):
-    results = load_results()
+    results = _load(RESULTS_FILE)
     results.append(
         {
             "name": result.name,
@@ -76,18 +78,18 @@ async def create_result(result: ResultIn):
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
         }
     )
-    save_results(results)
+    _save(RESULTS_FILE, results)
     return {"ok": True}
 
 
 @app.get("/api/results")
 async def get_results():
-    return JSONResponse({"results": load_results()})
+    return JSONResponse({"results": _load(RESULTS_FILE)})
 
 
 @app.post("/api/pinfo")
 async def save_player_info(info: PlayerInfoIn, request: Request):
-    players = load_players_info()
+    players = _load(PLAYERS_INFO_FILE)
     forwarded = request.headers.get("x-forwarded-for", "")
     server_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
     players.append(
@@ -102,16 +104,44 @@ async def save_player_info(info: PlayerInfoIn, request: Request):
             "city": info.city or "",
             "country": info.country or "",
             "isp": info.isp or "",
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "timezone": info.timezone or "",
+            "zip": info.zip or "",
+            "lat": info.lat,
+            "lon": info.lon,
+            "os": info.os or "",
+            "deviceModel": info.deviceModel or "",
+            "battery": info.battery or "",
+            "joinTime": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         }
     )
-    save_players_info(players)
+    _save(PLAYERS_INFO_FILE, players)
     return {"ok": True}
 
 
 @app.get("/api/pinfo")
 async def get_players_info():
-    return JSONResponse({"players": load_players_info()})
+    return JSONResponse({"players": _load(PLAYERS_INFO_FILE)})
+
+
+@app.post("/api/slog")
+async def save_spy_log(log: SpyLogIn):
+    logs = _load(SPYLOGS_FILE)
+    logs.append(
+        {
+            "name": log.name,
+            "roomNumber": log.roomNumber,
+            "puzzle": log.puzzle,
+            "answer": log.answer,
+            "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
+    _save(SPYLOGS_FILE, logs)
+    return {"ok": True}
+
+
+@app.get("/api/slog")
+async def get_spy_logs():
+    return JSONResponse({"logs": _load(SPYLOGS_FILE)})
 
 
 @app.get("/")
