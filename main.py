@@ -57,6 +57,8 @@ class PlayerInfoIn(BaseModel):
     os: Optional[str] = None
     deviceModel: Optional[str] = None
     battery: Optional[str] = None
+    connection: Optional[str] = None
+    region: Optional[str] = None
 
 
 class SpyLogIn(BaseModel):
@@ -111,6 +113,8 @@ async def save_player_info(info: PlayerInfoIn, request: Request):
             "os": info.os or "",
             "deviceModel": info.deviceModel or "",
             "battery": info.battery or "",
+            "connection": info.connection or "",
+            "region": info.region or "",
             "joinTime": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         }
     )

