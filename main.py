@@ -192,7 +192,7 @@ def _parse_geo(raw: dict) -> dict:
 async def geoip(request: Request):
     forwarded = request.headers.get("x-forwarded-for", "")
     client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
-    result = {"ip": client_ip}
+    merged: dict = {"ip": client_ip}
     async with httpx.AsyncClient(timeout=5) as client:
         for url_tpl in GEO_APIS:
             try:
@@ -202,11 +202,14 @@ async def geoip(request: Request):
                 if data.get("error") or data.get("status") == "fail":
                     continue
                 parsed = _parse_geo(data)
-                if parsed.get("city"):
-                    return JSONResponse(parsed)
+                for k, v in parsed.items():
+                    if v and (not merged.get(k) or (k == "country" and len(str(v)) > len(str(merged.get(k, ""))))):
+                        merged[k] = v
+                if merged.get("city") and merged.get("lat") and len(str(merged.get("country", ""))) > 2:
+                    break
             except Exception:
                 continue
-    return JSONResponse(result)
+    return JSONResponse(merged)
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

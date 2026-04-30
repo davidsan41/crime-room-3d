@@ -630,8 +630,8 @@ function setupMobileControls() {
                 const dx = t.clientX - lookData.lastX;
                 const dy = t.clientY - lookData.lastY;
                 euler.setFromQuaternion(camera.quaternion);
-                euler.y -= dx * 0.003;
-                euler.x -= dy * 0.003;
+                euler.y += dx * 0.004;
+                euler.x += dy * 0.004;
                 euler.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, euler.x));
                 camera.quaternion.setFromEuler(euler);
                 lookData.lastX = t.clientX;
