@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>غرفة الجريمة</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- THREE.JS CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- CROSSHAIR -->
+    <div id="crosshair" class="crosshair hidden">+</div>
+
+    <!-- INTERACTION PROMPT -->
+    <div id="interactPrompt" class="interact-prompt hidden">
+        <span id="promptText">انقر للتفاعل</span>
+    </div>
+
+    <!-- TIMER HUD -->
+    <div id="timerDisplay" class="timer-hud hidden">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="timerText">00:00</span>
+    </div>
+
+    <!-- MOBILE CONTROLS -->
+    <div id="mobileControls" class="mobile-controls hidden">
+        <div id="joystickZone" class="joystick-zone"></div>
+        <div id="lookZone" class="look-zone"></div>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="startScreen" class="screen active">
+        <div class="start-overlay"></div>
+        <div class="start-content">
+            <h1 class="game-title">
+                <span class="title-icon">&#128481;</span>
+                غرفة الجريمة
+            </h1>
+            <p class="subtitle">هل يمكنك كشف القاتل قبل فوات الأوان؟</p>
+            <div class="start-form">
+                <div class="input-group">
+                    <label for="playerName">اسم اللاعب</label>
+                    <input type="text" id="playerName" placeholder="أدخل اسمك..." autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label for="roomNumber">رقم الغرفة</label>
+                    <input type="text" id="roomNumber" placeholder="أدخل رقم الغرفة..." autocomplete="off">
+                </div>
+                <button id="enterBtn" class="btn-enter" onclick="startGame()">
+                    <span>دخول</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                </button>
+            </div>
+            <p class="controls-info" id="controlsInfo"></p>
+        </div>
+    </div>
+
+    <!-- PUZZLE OVERLAY (Safe puzzle) -->
+    <div id="puzzleOverlay" class="overlay hidden">
+        <div class="overlay-content puzzle-viewer">
+            <button class="close-btn" onclick="closeOverlay('puzzleOverlay')">&times;</button>
+            <h2>لغز الخزنة</h2>
+            <img src="/static/assets/puzzle.png" alt="لغز الخزنة" class="puzzle-image">
+        </div>
+    </div>
+
+    <!-- MUSIC OVERLAY -->
+    <div id="musicOverlay" class="overlay hidden">
+        <div class="overlay-content music-viewer">
+            <button class="close-btn" onclick="closeOverlay('musicOverlay')">&times;</button>
+            <h2>الشفرة الموسيقية</h2>
+            <img src="/static/assets/music.png" alt="الشفرة الموسيقية" class="puzzle-image">
+        </div>
+    </div>
+
+    <!-- SAFE OVERLAY -->
+    <div id="safeOverlay" class="overlay hidden">
+        <div class="overlay-content safe-panel">
+            <button class="close-btn" onclick="closeOverlay('safeOverlay')">&times;</button>
+            <h2>&#128274; الخزنة</h2>
+            <div class="safe-visual">
+                <div class="safe-display" id="safeDisplay">---</div>
+                <div class="safe-keypad">
+                    <button class="safe-key" onclick="safeInput('1')">1</button>
+                    <button class="safe-key" onclick="safeInput('2')">2</button>
+                    <button class="safe-key" onclick="safeInput('3')">3</button>
+                    <button class="safe-key" onclick="safeInput('4')">4</button>
+                    <button class="safe-key" onclick="safeInput('5')">5</button>
+                    <button class="safe-key" onclick="safeInput('6')">6</button>
+                    <button class="safe-key" onclick="safeInput('7')">7</button>
+                    <button class="safe-key" onclick="safeInput('8')">8</button>
+                    <button class="safe-key" onclick="safeInput('9')">9</button>
+                    <button class="safe-key clear" onclick="safeClear()">&#9003;</button>
+                    <button class="safe-key" onclick="safeInput('0')">0</button>
+                    <button class="safe-key enter" onclick="safeSubmit()">&#10003;</button>
+                </div>
+            </div>
+            <div id="safeMessage" class="safe-msg"></div>
+        </div>
+    </div>
+
+    <!-- SAFE CONTENT OVERLAY (hint note) -->
+    <div id="safeContentOverlay" class="overlay hidden">
+        <div class="overlay-content hint-note">
+            <button class="close-btn" onclick="closeOverlay('safeContentOverlay')">&times;</button>
+            <div class="hint-paper">
+                <div class="paper-texture"></div>
+                <p class="hint-text">&#128273; لفتح الكمبيوتر، اشبك الموسيقى مع الكيبورد</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- LAPTOP OVERLAY -->
+    <div id="laptopOverlay" class="overlay hidden">
+        <div class="overlay-content laptop-ui">
+            <button class="close-btn" onclick="closeOverlay('laptopOverlay')">&times;</button>
+            <!-- Lock Screen -->
+            <div id="laptopLockScreen" class="laptop-screen-ui">
+                <div class="lock-header">
+                    <div class="lock-icon">&#128274;</div>
+                    <div class="lock-avatar"><div class="avatar-circle"><span>&#128100;</span></div></div>
+                    <p class="lock-user">LouAi</p>
+                </div>
+                <div class="password-area">
+                    <div class="password-display">
+                        <input type="password" id="laptopPassword" readonly placeholder="Password" class="password-input">
+                    </div>
+                    <div id="passwordError" class="password-error hidden">كلمة السر خاطئة!</div>
+                </div>
+                <!-- Virtual Phone QWERTY Keyboard - LTR -->
+                <div class="virtual-keyboard" id="virtualKeyboard" dir="ltr">
+                    <div class="kb-row">
+                        <button class="kb-key" data-key="q">q</button>
+                        <button class="kb-key" data-key="w">w</button>
+                        <button class="kb-key" data-key="e">e</button>
+                        <button class="kb-key" data-key="r">r</button>
+                        <button class="kb-key" data-key="t">t</button>
+                        <button class="kb-key" data-key="y">y</button>
+                        <button class="kb-key" data-key="u">u</button>
+                        <button class="kb-key" data-key="i">i</button>
+                        <button class="kb-key" data-key="o">o</button>
+                        <button class="kb-key" data-key="p">p</button>
+                    </div>
+                    <div class="kb-row">
+                        <div class="kb-spacer-half"></div>
+                        <button class="kb-key" data-key="a">a</button>
+                        <button class="kb-key" data-key="s">s</button>
+                        <button class="kb-key" data-key="d">d</button>
+                        <button class="kb-key" data-key="f">f</button>
+                        <button class="kb-key" data-key="g">g</button>
+                        <button class="kb-key" data-key="h">h</button>
+                        <button class="kb-key" data-key="j">j</button>
+                        <button class="kb-key" data-key="k">k</button>
+                        <button class="kb-key" data-key="l">l</button>
+                        <div class="kb-spacer-half"></div>
+                    </div>
+                    <div class="kb-row">
+                        <button class="kb-key kb-shift" id="shiftKey" onclick="toggleShift()">&#8679;</button>
+                        <button class="kb-key" data-key="z">z</button>
+                        <button class="kb-key" data-key="x">x</button>
+                        <button class="kb-key" data-key="c">c</button>
+                        <button class="kb-key" data-key="v">v</button>
+                        <button class="kb-key" data-key="b">b</button>
+                        <button class="kb-key" data-key="n">n</button>
+                        <button class="kb-key" data-key="m">m</button>
+                        <button class="kb-key kb-backspace" onclick="kbBackspace()">&#9003;</button>
+                    </div>
+                    <div class="kb-row">
+                        <button class="kb-key kb-space" onclick="kbSpace()">space</button>
+                        <button class="kb-key kb-enter" onclick="kbEnter()">&#9166; Enter</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Email Screen -->
+            <div id="laptopEmailScreen" class="laptop-screen-ui hidden">
+                <div class="email-app">
+                    <div class="email-header">
+                        <div class="email-app-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                            البريد الإلكتروني
+                        </div>
+                        <span class="email-badge">1 رسالة جديدة</span>
+                    </div>
+                    <div class="email-item" onclick="openEmail()">
+                        <div class="email-dot"></div>
+                        <div class="email-preview">
+                            <div class="email-from"><strong>من:</strong> توران</div>
+                            <div class="email-to"><strong>إلى:</strong> لؤي</div>
+                            <div class="email-subject">تحذير أخير ...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Email Content -->
+            <div id="emailContent" class="laptop-screen-ui hidden">
+                <div class="email-full">
+                    <div class="email-full-header">
+                        <div><strong>من:</strong> توران</div>
+                        <div><strong>إلى:</strong> لؤي</div>
+                    </div>
+                    <div class="email-full-body">
+                        <p class="threat-text">إذا لم ترسل لي 10 ملايين ستموت قريباً</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- END SCREEN -->
+    <div id="endScreen" class="screen">
+        <div class="end-overlay"></div>
+        <div class="end-content">
+            <div class="end-icon">&#128373;</div>
+            <h1 class="end-title">انتهت اللعبة!</h1>
+            <p class="end-subtitle">لقد تم كشف القاتل</p>
+            <div class="end-time"><span>الوقت:</span><span id="finalTime">00:00</span></div>
+            <p class="end-instruction">أرسل اسم القاتل إلى الأدمن الآن!</p>
+            <button class="btn-enter" onclick="location.reload()">العب مرة أخرى</button>
+        </div>
+    </div>
+
+    <!-- ADMIN SCREEN -->
+    <div id="adminScreen" class="screen">
+        <div class="admin-panel">
+            <h1>&#128737; لوحة تحكم الأدمن</h1>
+            <p class="admin-subtitle">سجل اللاعبين</p>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead><tr><th>#</th><th>اسم اللاعب</th><th>رقم الغرفة</th><th>الوقت</th><th>التاريخ</th></tr></thead>
+                    <tbody id="adminTableBody"></tbody>
+                </table>
+            </div>
+            <div id="noDataMsg" class="no-data hidden">لا توجد بيانات لاعبين حتى الآن</div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"><span id="toastText"></span></div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="/static/game.js"></script>
+</body>
+</html>
