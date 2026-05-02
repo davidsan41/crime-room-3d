@@ -7,7 +7,7 @@ const ADMIN_NAME = 'admin-louai';
 const PUZZLE_DIGITS = ['7', '3', '9', '1', '4', '8'];
 const ROOM_W = 10, ROOM_H = 3.5, ROOM_D = 8;
 const PLAYER_HEIGHT = 1.6;
-const MOVE_SPEED = 4.0;
+const MOVE_SPEED = 7.0;
 const RADIO_TARGET = 1045; // FM 104.5
 
 // ============= GAME STATE =============
@@ -183,19 +183,19 @@ function init3D() {
     euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a12);
-    scene.fog = new THREE.FogExp2(0x0a0a12, 0.04);
+    scene.background = new THREE.Color(0x1a1a2a);
+    scene.fog = new THREE.FogExp2(0x1a1a2a, 0.015);
 
     camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, PLAYER_HEIGHT, 3);
 
     renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.BasicShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = 1.8;
 
     clock = new THREE.Clock();
     raycaster = new THREE.Raycaster();
@@ -226,10 +226,10 @@ function makeCanvasTex(w, h, drawFn) {
 
 function wallTex() {
     return makeCanvasTex(256, 256, (ctx, w, h) => {
-        ctx.fillStyle = '#2a2535';
+        ctx.fillStyle = '#5a5060';
         ctx.fillRect(0, 0, w, h);
-        for (let i = 0; i < 800; i++) {
-            ctx.fillStyle = `rgba(${100 + Math.random() * 50},${90 + Math.random() * 40},${110 + Math.random() * 50},0.15)`;
+        for (let i = 0; i < 400; i++) {
+            ctx.fillStyle = `rgba(${140 + Math.random() * 60},${130 + Math.random() * 50},${150 + Math.random() * 60},0.12)`;
             ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 4, 2 + Math.random() * 4);
         }
     });
@@ -237,13 +237,13 @@ function wallTex() {
 
 function floorTex() {
     return makeCanvasTex(512, 512, (ctx, w, h) => {
-        ctx.fillStyle = '#1a1510';
+        ctx.fillStyle = '#3a3025';
         ctx.fillRect(0, 0, w, h);
         const tileSize = 64;
         for (let x = 0; x < w; x += tileSize) {
             for (let y = 0; y < h; y += tileSize) {
-                const b = 20 + Math.random() * 15;
-                ctx.fillStyle = `rgb(${b + 6},${b + 2},${b})`;
+                const b = 45 + Math.random() * 20;
+                ctx.fillStyle = `rgb(${b + 10},${b + 5},${b})`;
                 ctx.fillRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
             }
         }
@@ -252,22 +252,34 @@ function floorTex() {
 
 function ceilTex() {
     return makeCanvasTex(256, 256, (ctx, w, h) => {
-        ctx.fillStyle = '#1e1e28';
+        ctx.fillStyle = '#4a4a58';
         ctx.fillRect(0, 0, w, h);
     });
 }
 
 function woodTex() {
-    return makeCanvasTex(128, 128, (ctx, w, h) => {
-        ctx.fillStyle = '#3d2b1f';
+    return makeCanvasTex(256, 256, (ctx, w, h) => {
+        const grad = ctx.createLinearGradient(0, 0, w, h);
+        grad.addColorStop(0, '#6b4a30');
+        grad.addColorStop(0.5, '#5a3d28');
+        grad.addColorStop(1, '#7a5535');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
-        for (let i = 0; i < 30; i++) {
-            ctx.strokeStyle = `rgba(60,40,25,0.4)`;
-            ctx.lineWidth = 1 + Math.random() * 2;
+        for (let i = 0; i < 50; i++) {
+            const y = Math.random() * h;
+            ctx.strokeStyle = `rgba(90,60,35,${0.2 + Math.random() * 0.3})`;
+            ctx.lineWidth = 0.5 + Math.random() * 1.5;
             ctx.beginPath();
-            ctx.moveTo(0, Math.random() * h);
-            ctx.lineTo(w, Math.random() * h);
+            ctx.moveTo(0, y);
+            ctx.bezierCurveTo(w * 0.3, y + (Math.random() - 0.5) * 4, w * 0.7, y + (Math.random() - 0.5) * 4, w, y);
             ctx.stroke();
+        }
+        for (let i = 0; i < 3; i++) {
+            const kx = Math.random() * w, ky = Math.random() * h;
+            ctx.fillStyle = `rgba(80,50,30,0.3)`;
+            ctx.beginPath();
+            ctx.ellipse(kx, ky, 3 + Math.random() * 5, 2 + Math.random() * 3, Math.random() * Math.PI, 0, Math.PI * 2);
+            ctx.fill();
         }
     });
 }
@@ -396,19 +408,30 @@ function buildFurniture() {
 }
 
 function createTable(x, y, z, w, h, d, mat) {
-    const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mat);
+    // Table top with beveled edges (thicker)
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), mat);
     top.position.set(x, h, z);
     top.castShadow = true;
     top.receiveShadow = true;
     scene.add(top);
 
-    const legGeo = new THREE.BoxGeometry(0.04, h, 0.04);
-    const legMat = mat.clone();
+    // Edge trim
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x5a3d28, roughness: 0.4, metalness: 0.1 });
+    const frontEdge = new THREE.Mesh(new THREE.BoxGeometry(w + 0.02, 0.02, 0.01), edgeMat);
+    frontEdge.position.set(x, h - 0.02, z + d / 2);
+    scene.add(frontEdge);
+    const backEdge = frontEdge.clone();
+    backEdge.position.z = z - d / 2;
+    scene.add(backEdge);
+
+    // Rounded legs
+    const legGeo = new THREE.CylinderGeometry(0.025, 0.02, h, 8);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x4a3020, roughness: 0.4, metalness: 0.1 });
     const offsets = [
-        [x - w / 2 + 0.04, h / 2, z - d / 2 + 0.04],
-        [x + w / 2 - 0.04, h / 2, z - d / 2 + 0.04],
-        [x - w / 2 + 0.04, h / 2, z + d / 2 - 0.04],
-        [x + w / 2 - 0.04, h / 2, z + d / 2 - 0.04],
+        [x - w / 2 + 0.05, h / 2, z - d / 2 + 0.05],
+        [x + w / 2 - 0.05, h / 2, z - d / 2 + 0.05],
+        [x - w / 2 + 0.05, h / 2, z + d / 2 - 0.05],
+        [x + w / 2 - 0.05, h / 2, z + d / 2 - 0.05],
     ];
     offsets.forEach(p => {
         const leg = new THREE.Mesh(legGeo, legMat);
@@ -448,41 +471,81 @@ function createShelf(x, y, z, w, h, d, mat) {
 }
 
 function createBookshelf(x, y, z) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2a1c13, roughness: 0.6 });
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.0, 0.3), mat);
-    frame.position.set(x, 1.0, z);
-    frame.castShadow = true;
-    scene.add(frame);
+    const shelfMat = new THREE.MeshStandardMaterial({ map: woodTex(), roughness: 0.5 });
 
-    // Books
-    const colors = [0x8b1a1a, 0x1a3d8b, 0x1a6b1a, 0x6b5a1a, 0x5a1a6b, 0x1a5a5a];
-    for (let i = 0; i < 6; i++) {
-        const book = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06 + Math.random() * 0.04, 0.22 + Math.random() * 0.06, 0.2),
-            new THREE.MeshStandardMaterial({ color: colors[i], roughness: 0.7 })
-        );
-        book.position.set(x - 0.25 + i * 0.1, 1.55 + (i % 2) * 0.02, z + 0.02);
-        book.rotation.z = (Math.random() - 0.5) * 0.1;
-        book.castShadow = true;
-        scene.add(book);
+    // Back panel
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.2, 0.03), shelfMat);
+    back.position.set(x, 1.1, z - 0.13);
+    back.castShadow = true;
+    scene.add(back);
 
-        // One book hides a mirror (mirror 2)
-        if (i === 3) {
-            book.userData = { type: 'bookWithMirror', promptText: 'كتاب', mirrorIndex: 1 };
-            interactiveObjects.push(book);
+    // Side panels
+    const sideMat = shelfMat.clone();
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, 0.32), sideMat);
+    sideL.position.set(x - 0.48, 1.1, z);
+    sideL.castShadow = true;
+    scene.add(sideL);
+    const sideR = sideL.clone();
+    sideR.position.x = x + 0.48;
+    scene.add(sideR);
+
+    // Shelves (4 horizontal shelves)
+    const shelfYs = [0.05, 0.6, 1.2, 1.8];
+    shelfYs.forEach(sy => {
+        const sh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.03, 0.32), shelfMat);
+        sh.position.set(x, sy, z);
+        sh.receiveShadow = true;
+        scene.add(sh);
+    });
+    // Top
+    const topSh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.03, 0.32), shelfMat);
+    topSh.position.set(x, 2.2, z);
+    scene.add(topSh);
+
+    // Books on shelves
+    const bookColors = [0xaa2222, 0x2244aa, 0x22aa44, 0xaa8822, 0x7722aa, 0x22aaaa, 0xaa4400, 0x6644aa];
+    const shelfBookYs = [0.07, 0.62, 1.22, 1.82];
+
+    shelfBookYs.forEach((baseY, shelfIdx) => {
+        const numBooks = 6 + Math.floor(Math.random() * 3);
+        let bx = x - 0.42;
+        for (let i = 0; i < numBooks; i++) {
+            const bw = 0.04 + Math.random() * 0.05;
+            const bh = 0.2 + Math.random() * 0.12;
+            const bd = 0.18 + Math.random() * 0.06;
+            const color = bookColors[(i + shelfIdx * 3) % bookColors.length];
+
+            // Book spine texture
+            const bookTex = makeCanvasTex(64, 128, (ctx, w, h) => {
+                ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+                ctx.fillRect(0, 0, w, h);
+                // Spine detail lines
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fillRect(0, 8, w, 2);
+                ctx.fillRect(0, h - 10, w, 2);
+                // Title area
+                ctx.fillStyle = 'rgba(255,215,0,0.3)';
+                ctx.fillRect(4, h * 0.3, w - 8, h * 0.15);
+            });
+
+            const book = new THREE.Mesh(
+                new THREE.BoxGeometry(bw, bh, bd),
+                new THREE.MeshStandardMaterial({ map: bookTex, roughness: 0.6 })
+            );
+            book.position.set(bx + bw / 2, baseY + bh / 2 + 0.015, z + 0.02);
+            book.rotation.z = (Math.random() - 0.5) * 0.08;
+            book.castShadow = true;
+            scene.add(book);
+
+            // One book on second shelf hides a mirror
+            if (shelfIdx === 2 && i === 3) {
+                book.userData = { type: 'bookWithMirror', promptText: 'كتاب مثير للاهتمام', mirrorIndex: 1 };
+                interactiveObjects.push(book);
+            }
+
+            bx += bw + 0.005;
         }
-    }
-
-    // Lower shelf books
-    for (let i = 0; i < 5; i++) {
-        const book = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06 + Math.random() * 0.04, 0.2 + Math.random() * 0.05, 0.18),
-            new THREE.MeshStandardMaterial({ color: colors[(i + 2) % 6], roughness: 0.7 })
-        );
-        book.position.set(x - 0.2 + i * 0.1, 0.55, z + 0.02);
-        book.castShadow = true;
-        scene.add(book);
-    }
+    });
 }
 
 // ============= PUZZLE OBJECTS =============
@@ -566,23 +629,51 @@ function buildPuzzleObjects() {
     paintingCanvas.width = 200;
     paintingCanvas.height = 200;
     const pCtx = paintingCanvas.getContext('2d');
-    // Chaotic lines
+    // Chaotic lines background
     pCtx.fillStyle = '#f0e8d0';
     pCtx.fillRect(0, 0, 200, 200);
-    for (let i = 0; i < 60; i++) {
-        pCtx.strokeStyle = `hsl(${Math.random() * 360}, 70%, 50%)`;
+    // Draw many colorful chaotic lines including lots of red lines to camouflage the number
+    for (let i = 0; i < 120; i++) {
+        const hue = Math.random() * 360;
+        pCtx.strokeStyle = `hsl(${hue}, 70%, 50%)`;
+        pCtx.lineWidth = 1 + Math.random() * 4;
+        pCtx.beginPath();
+        pCtx.moveTo(Math.random() * 200, Math.random() * 200);
+        pCtx.bezierCurveTo(
+            Math.random() * 200, Math.random() * 200,
+            Math.random() * 200, Math.random() * 200,
+            Math.random() * 200, Math.random() * 200
+        );
+        pCtx.stroke();
+    }
+    // Extra red chaotic lines to fully camouflage the hidden number
+    for (let i = 0; i < 40; i++) {
+        pCtx.strokeStyle = `hsl(${Math.random() * 20 + 350}, ${60 + Math.random() * 30}%, ${40 + Math.random() * 25}%)`;
         pCtx.lineWidth = 1 + Math.random() * 3;
+        pCtx.beginPath();
+        pCtx.moveTo(Math.random() * 200, Math.random() * 200);
+        pCtx.bezierCurveTo(
+            Math.random() * 200, Math.random() * 200,
+            Math.random() * 200, Math.random() * 200,
+            Math.random() * 200, Math.random() * 200
+        );
+        pCtx.stroke();
+    }
+    // Hidden number drawn in red - completely buried under the red chaotic lines
+    pCtx.fillStyle = 'rgba(200,50,50,0.6)';
+    pCtx.font = 'bold 80px Arial';
+    pCtx.textAlign = 'center';
+    pCtx.textBaseline = 'middle';
+    pCtx.fillText(PUZZLE_DIGITS[2], 100, 100);
+    // Cover with more chaotic lines to further hide
+    for (let i = 0; i < 30; i++) {
+        pCtx.strokeStyle = `hsl(${Math.random() * 360}, 70%, 50%)`;
+        pCtx.lineWidth = 1 + Math.random() * 2;
         pCtx.beginPath();
         pCtx.moveTo(Math.random() * 200, Math.random() * 200);
         pCtx.lineTo(Math.random() * 200, Math.random() * 200);
         pCtx.stroke();
     }
-    // Hidden number in RED only (visible with red filter)
-    pCtx.fillStyle = '#cc3333';
-    pCtx.font = 'bold 80px Arial';
-    pCtx.textAlign = 'center';
-    pCtx.textBaseline = 'middle';
-    pCtx.fillText(PUZZLE_DIGITS[2], 100, 100);
 
     const paintTex = new THREE.CanvasTexture(paintingCanvas);
     paintingMesh = new THREE.Mesh(
@@ -608,24 +699,54 @@ function buildPuzzleObjects() {
     interactiveObjects.push(filterMesh);
 
     // === Puzzle 4: Black cup and coffee machine ===
-    // Coffee machine
-    coffeeMachineMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.25, 0.35, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.4 })
+    // Coffee machine - more detailed
+    const cmGroup = new THREE.Group();
+    const cmBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.32, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.5 })
     );
-    coffeeMachineMesh.position.set(-3.5, 0.8 + 0.175, -3);
-    coffeeMachineMesh.userData = { type: 'coffeeMachine', promptText: 'آلة صنع قهوة' };
-    coffeeMachineMesh.castShadow = true;
-    scene.add(coffeeMachineMesh);
-    interactiveObjects.push(coffeeMachineMesh);
+    cmBody.position.y = 0.16;
+    cmGroup.add(cmBody);
 
-    // Coffee machine nozzle
-    const nozzle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.02, 0.05, 8),
-        new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.6 })
+    // Water tank on top
+    const cmTank = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.1, 0.12),
+        new THREE.MeshStandardMaterial({ color: 0x335577, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 })
     );
-    nozzle.position.set(-3.5, 0.8 + 0.02, -3 + 0.05);
-    scene.add(nozzle);
+    cmTank.position.set(0, 0.37, -0.02);
+    cmGroup.add(cmTank);
+
+    // Drip tray
+    const cmTray = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.015, 0.15),
+        new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.6, roughness: 0.3 })
+    );
+    cmTray.position.set(0, 0.008, 0.03);
+    cmGroup.add(cmTray);
+
+    // Nozzle
+    const nozzle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.015, 0.02, 0.06, 8),
+        new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8, roughness: 0.2 })
+    );
+    nozzle.position.set(0, 0.06, 0.03);
+    cmGroup.add(nozzle);
+
+    // Button
+    const cmBtn = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.015, 0.015, 0.01, 12),
+        new THREE.MeshStandardMaterial({ color: 0x22aa22, emissive: 0x115511, emissiveIntensity: 0.5 })
+    );
+    cmBtn.position.set(0.08, 0.25, 0.101);
+    cmBtn.rotation.x = Math.PI / 2;
+    cmGroup.add(cmBtn);
+
+    cmGroup.position.set(-3.5, 0.82, -3);
+    cmGroup.castShadow = true;
+    scene.add(cmGroup);
+    coffeeMachineMesh = cmGroup;
+    coffeeMachineMesh.userData = { type: 'coffeeMachine', promptText: 'آلة صنع قهوة' };
+    interactiveObjects.push(coffeeMachineMesh);
 
     // Black cup
     cupMesh = createCup(-3.2, 0.82, -3);
@@ -875,40 +996,60 @@ function buildRedHerrings() {
 
 // ============= LIGHTS =============
 function setupLights() {
-    const ambient = new THREE.AmbientLight(0x252535, 0.6);
+    // Strong ambient for well-lit room
+    const ambient = new THREE.AmbientLight(0xffeedd, 1.2);
     scene.add(ambient);
 
-    // Main ceiling light
-    const ceiling = new THREE.PointLight(0xffddaa, 0.8, 12);
+    // Hemisphere light for natural fill
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 0.8);
+    scene.add(hemi);
+
+    // Main ceiling light (center)
+    const ceiling = new THREE.PointLight(0xffeecc, 1.5, 20);
     ceiling.position.set(0, ROOM_H - 0.2, 0);
     ceiling.castShadow = true;
-    ceiling.shadow.mapSize.set(1024, 1024);
+    ceiling.shadow.mapSize.set(512, 512);
     scene.add(ceiling);
 
     // Light bulb mesh
     const bulb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 8, 8),
-        new THREE.MeshStandardMaterial({ emissive: 0xffddaa, emissiveIntensity: 2 })
+        new THREE.SphereGeometry(0.08, 12, 12),
+        new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 3, color: 0xffffee })
     );
     bulb.position.copy(ceiling.position);
     scene.add(bulb);
+
+    // Secondary ceiling lights for even coverage
+    const ceil2 = new THREE.PointLight(0xffeecc, 1.0, 15);
+    ceil2.position.set(-3, ROOM_H - 0.3, -2);
+    scene.add(ceil2);
+    const bulb2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 2 }));
+    bulb2.position.copy(ceil2.position);
+    scene.add(bulb2);
+
+    const ceil3 = new THREE.PointLight(0xffeecc, 1.0, 15);
+    ceil3.position.set(3, ROOM_H - 0.3, 2);
+    scene.add(ceil3);
+    const bulb3 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 2 }));
+    bulb3.position.copy(ceil3.position);
+    scene.add(bulb3);
+
+    const ceil4 = new THREE.PointLight(0xffeecc, 0.8, 12);
+    ceil4.position.set(-3, ROOM_H - 0.3, 2);
+    scene.add(ceil4);
+
+    const ceil5 = new THREE.PointLight(0xffeecc, 0.8, 12);
+    ceil5.position.set(3, ROOM_H - 0.3, -2);
+    scene.add(ceil5);
 
     // Spotlight for mirror puzzle (white light on floor)
     lightSpotlight = new THREE.SpotLight(0xffffff, 1.5, 8, Math.PI / 8, 0.3);
     lightSpotlight.position.set(-3, 0.5, -ROOM_D / 2 + 0.5);
     lightSpotlight.target.position.set(-3, 0, -2);
     lightSpotlight.castShadow = true;
+    lightSpotlight.shadow.mapSize.set(512, 512);
     scene.add(lightSpotlight);
     scene.add(lightSpotlight.target);
-
-    // Subtle accent lights
-    const accent1 = new THREE.PointLight(0x4488ff, 0.3, 5);
-    accent1.position.set(-3, 2, -2);
-    scene.add(accent1);
-
-    const accent2 = new THREE.PointLight(0xff8844, 0.2, 5);
-    accent2.position.set(3, 2, 2);
-    scene.add(accent2);
 }
 
 // ============= CONTROLS =============
@@ -936,12 +1077,12 @@ function setupControls() {
             camera.quaternion.setFromEuler(euler);
         });
 
-        // AZERTY: Z=forward, S=back, Q=left, D=right
+        // AZERTY: S=forward, Z=back, Q=left, D=right
         document.addEventListener('keydown', (e) => {
             if (state.overlayOpen) return;
             switch (e.code) {
-                case 'KeyW': case 'KeyZ': moveForward = true; break;
-                case 'KeyS': moveBackward = true; break;
+                case 'KeyS': case 'KeyW': moveForward = true; break;
+                case 'KeyZ': moveBackward = true; break;
                 case 'KeyA': case 'KeyQ': moveLeft = true; break;
                 case 'KeyD': moveRight = true; break;
                 case 'KeyE': case 'Space': tryInteract(); break;
@@ -950,8 +1091,8 @@ function setupControls() {
 
         document.addEventListener('keyup', (e) => {
             switch (e.code) {
-                case 'KeyW': case 'KeyZ': moveForward = false; break;
-                case 'KeyS': moveBackward = false; break;
+                case 'KeyS': case 'KeyW': moveForward = false; break;
+                case 'KeyZ': moveBackward = false; break;
                 case 'KeyA': case 'KeyQ': moveLeft = false; break;
                 case 'KeyD': moveRight = false; break;
             }
@@ -1797,7 +1938,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (info) {
         info.textContent = isMob
             ? 'التحكم: عصا افتراضية للحركة + سحب للنظر'
-            : 'التحكم: Z/S/Q/D للحركة | الماوس للنظر | نقر للتفاعل';
+            : 'التحكم: S/Z/Q/D للحركة | الماوس للنظر | نقر للتفاعل';
     }
     isMobile = isMob;
 
