@@ -58,6 +58,7 @@ let paperMesh, lighterMesh, phoneMesh, filterMesh, paintingMesh;
 let cupMesh, coffeeMachineMesh, sculptureMesh, deskLampMesh, xMarkMesh;
 let radioMesh, doorMesh, lockScreenMesh;
 let lightSpotlight;
+let gltfLoader, texLoader;
 
 // Mirror beam segments
 let beamSegments = [];
@@ -183,8 +184,8 @@ function init3D() {
     euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a2a);
-    scene.fog = new THREE.FogExp2(0x1a1a2a, 0.015);
+    scene.background = new THREE.Color(0x0e0e18);
+    scene.fog = new THREE.FogExp2(0x0e0e18, 0.025);
 
     camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, PLAYER_HEIGHT, 3);
@@ -193,14 +194,18 @@ function init3D() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.BasicShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.8;
+    renderer.toneMappingExposure = 1.2;
+    renderer.outputEncoding = THREE.sRGBEncoding;
 
     clock = new THREE.Clock();
     raycaster = new THREE.Raycaster();
     raycaster.far = 4;
     centerRay = new THREE.Vector2(0, 0);
+
+    gltfLoader = new THREE.GLTFLoader();
+    texLoader = new THREE.TextureLoader();
 
     buildRoom();
     buildFurniture();
@@ -284,14 +289,39 @@ function woodTex() {
     });
 }
 
+// ============= TEXTURE HELPERS =============
+function loadPBRTexture(basePath, repeatX, repeatY) {
+    const diff = texLoader.load('/static/textures/' + basePath + '_diff.jpg');
+    const nor = texLoader.load('/static/textures/' + basePath + '_nor.jpg');
+    diff.wrapS = diff.wrapT = THREE.RepeatWrapping;
+    nor.wrapS = nor.wrapT = THREE.RepeatWrapping;
+    if (repeatX && repeatY) {
+        diff.repeat.set(repeatX, repeatY);
+        nor.repeat.set(repeatX, repeatY);
+    }
+    diff.encoding = THREE.sRGBEncoding;
+    const props = { map: diff, normalMap: nor, normalScale: new THREE.Vector2(0.8, 0.8) };
+    // Try to load roughness map
+    const rough = texLoader.load('/static/textures/' + basePath + '_rough.jpg');
+    if (rough) {
+        rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
+        if (repeatX && repeatY) rough.repeat.set(repeatX, repeatY);
+        props.roughnessMap = rough;
+    }
+    return props;
+}
+
 // ============= ROOM GEOMETRY =============
 function buildRoom() {
-    const wt = wallTex(), ft = floorTex(), ct = ceilTex();
-    ft.repeat.set(3, 2);
+    // Load PBR textures from Poly Haven
+    const floorProps = loadPBRTexture('floor', 4, 3);
+    const wallProps = loadPBRTexture('wall', 3, 1.5);
+    const ceilProps = loadPBRTexture('ceil', 3, 2);
+    const woodProps = loadPBRTexture('wood', 2, 2);
 
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(ROOM_W, ROOM_D),
-        new THREE.MeshStandardMaterial({ map: ft, roughness: 0.8 })
+        new THREE.MeshStandardMaterial({ ...floorProps, roughness: 0.8 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -299,13 +329,13 @@ function buildRoom() {
 
     const ceil = new THREE.Mesh(
         new THREE.PlaneGeometry(ROOM_W, ROOM_D),
-        new THREE.MeshStandardMaterial({ map: ct, roughness: 0.9 })
+        new THREE.MeshStandardMaterial({ ...ceilProps, roughness: 0.9, color: 0x888888 })
     );
     ceil.rotation.x = Math.PI / 2;
     ceil.position.y = ROOM_H;
     scene.add(ceil);
 
-    const wallMat = new THREE.MeshStandardMaterial({ map: wt, roughness: 0.7 });
+    const wallMat = new THREE.MeshStandardMaterial({ ...wallProps, roughness: 0.7, color: 0x999999 });
 
     // Back wall (has door)
     const backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_H), wallMat);
@@ -336,13 +366,14 @@ function buildRoom() {
     rightWall.receiveShadow = true;
     scene.add(rightWall);
 
-    // Door frame on back wall
-    const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.5 });
+    // Door frame on back wall - use wood PBR texture
+    const doorWoodProps = loadPBRTexture('wood', 1, 2);
+    const doorFrameMat = new THREE.MeshStandardMaterial({ ...doorWoodProps, roughness: 0.4, metalness: 0.1, color: 0x664422 });
     const doorW = 1.0, doorH = 2.2;
     // Door
     doorMesh = new THREE.Mesh(
         new THREE.BoxGeometry(doorW, doorH, 0.08),
-        new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.4, metalness: 0.1 })
+        new THREE.MeshStandardMaterial({ ...doorWoodProps, roughness: 0.35, metalness: 0.05, color: 0x553318 })
     );
     doorMesh.position.set(2, doorH / 2, -ROOM_D / 2 + 0.05);
     doorMesh.castShadow = true;
@@ -380,31 +411,87 @@ function buildRoom() {
     scene.add(diamondMesh);
 }
 
+// ============= GLTF MODEL HELPER =============
+function loadModel(path, position, scale, rotation, callback) {
+    gltfLoader.load('/static/models/' + path, (gltf) => {
+        const model = gltf.scene;
+        model.position.set(position.x, position.y, position.z);
+        if (typeof scale === 'number') {
+            model.scale.setScalar(scale);
+        } else {
+            model.scale.set(scale.x, scale.y, scale.z);
+        }
+        if (rotation) {
+            model.rotation.set(rotation.x || 0, rotation.y || 0, rotation.z || 0);
+        }
+        model.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        scene.add(model);
+        if (callback) callback(model);
+    }, undefined, (err) => {
+        console.warn('Model load failed:', path, err);
+        // Fallback to primitive
+        if (callback) callback(null);
+    });
+}
+
 // ============= FURNITURE =============
 function buildFurniture() {
-    const wMat = new THREE.MeshStandardMaterial({ map: woodTex(), roughness: 0.6 });
+    // === Main table (center-left) - uses Poly Haven round_wooden_table ===
+    loadModel('round_wooden_table_01/round_wooden_table_01.gltf',
+        { x: -2.5, y: 0, z: -1 }, 0.85, { y: 0 });
 
-    // === Table 1 (center-left) - for paper and lighter ===
-    createTable(-2.5, 0, -1, 1.2, 0.75, 0.6, wMat);
+    // === Drawer cabinet / desk (right side) ===
+    loadModel('drawer_cabinet/drawer_cabinet.gltf',
+        { x: 3.5, y: 0, z: 1.5 }, 1.0, { y: Math.PI / 2 }, (model) => {
+            if (model) {
+                // Add interactive drawer hitbox on top of the cabinet
+                const drawerHitbox = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.5, 0.15, 0.4),
+                    new THREE.MeshStandardMaterial({ visible: false })
+                );
+                drawerHitbox.position.set(3.5, 0.55, 1.5);
+                drawerHitbox.userData = { type: 'drawer', promptText: 'درج المكتب', hasLighter: true };
+                scene.add(drawerHitbox);
+                interactiveObjects.push(drawerHitbox);
+            }
+        });
 
-    // === Desk with drawers (right side) ===
-    createDesk(3.5, 0, 1.5, 1.4, 0.75, 0.7, wMat);
-
-    // === Shelf on left wall ===
-    createShelf(-ROOM_W / 2 + 0.15, 1.8, -1.5, 1.0, 0.03, 0.25, wMat);
-    createShelf(-ROOM_W / 2 + 0.15, 1.2, -1.5, 1.0, 0.03, 0.25, wMat);
+    // === Shelf on left wall - using small_wooden_table as shelf ===
+    loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
+        { x: -ROOM_W / 2 + 0.5, y: 0, z: -1.5 }, 0.6, { y: Math.PI / 2 });
 
     // === Small table for coffee machine (back-left) ===
-    createTable(-3.5, 0, -3, 0.8, 0.8, 0.5, wMat);
+    loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
+        { x: -3.5, y: 0, z: -3 }, 0.5, { y: 0 });
 
     // === Table for radio (front-right) ===
-    createTable(3, 0, 3, 0.7, 0.6, 0.5, wMat);
+    loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
+        { x: 3, y: 0, z: 3 }, 0.45, { y: Math.PI / 4 });
 
-    // === Desk for lamp + sculpture (right wall) ===
-    createTable(ROOM_W / 2 - 0.8, 0, -0.5, 0.9, 0.75, 0.55, wMat);
+    // === Table for lamp + sculpture (right wall) ===
+    loadModel('round_wooden_table_01/round_wooden_table_01.gltf',
+        { x: ROOM_W / 2 - 0.8, y: 0, z: -0.5 }, 0.6, { y: 0 });
 
-    // === Bookshelf (front-left) ===
-    createBookshelf(-ROOM_W / 2 + 0.4, 0, 2.5);
+    // === Bookshelf (front-left) - Poly Haven worn bookshelf ===
+    loadModel('wooden_bookshelf_worn/wooden_bookshelf_worn.gltf',
+        { x: -ROOM_W / 2 + 0.35, y: 0, z: 2.5 }, 1.0, { y: Math.PI / 2 }, (model) => {
+            if (model) {
+                // Add interactive book hitbox
+                const bookHitbox = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.15, 0.25, 0.2),
+                    new THREE.MeshStandardMaterial({ visible: false })
+                );
+                bookHitbox.position.set(-ROOM_W / 2 + 0.4, 1.3, 2.5);
+                bookHitbox.userData = { type: 'bookWithMirror', promptText: 'كتاب مثير للاهتمام', mirrorIndex: 1 };
+                scene.add(bookHitbox);
+                interactiveObjects.push(bookHitbox);
+            }
+        });
 }
 
 function createTable(x, y, z, w, h, d, mat) {
@@ -604,25 +691,33 @@ function buildPuzzleObjects() {
     scene.add(paperMesh);
     interactiveObjects.push(paperMesh);
 
-    // === Puzzle 2: Phone on desk ===
-    phoneMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.07, 0.01, 0.14),
-        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.5 })
+    // === Puzzle 2: Phone on desk (detailed mesh) ===
+    const phoneGroup = new THREE.Group();
+    const phoneBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.008, 0.14),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.15, metalness: 0.7 })
     );
-    phoneMesh.position.set(3.3, 0.76, 1.5);
+    phoneGroup.add(phoneBody);
+    const phoneScreen2 = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.06, 0.11),
+        new THREE.MeshStandardMaterial({ color: 0x0a0a1e, emissive: 0x112244, emissiveIntensity: 0.5, roughness: 0.05 })
+    );
+    phoneScreen2.position.y = 0.005;
+    phoneScreen2.rotation.x = -Math.PI / 2;
+    phoneGroup.add(phoneScreen2);
+    const phoneCam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.004, 0.004, 0.003, 8),
+        new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.9 })
+    );
+    phoneCam.position.set(-0.02, 0.005, -0.06);
+    phoneCam.rotation.x = Math.PI / 2;
+    phoneGroup.add(phoneCam);
+    phoneGroup.position.set(3.3, 0.76, 1.5);
+    phoneGroup.castShadow = true;
+    scene.add(phoneGroup);
+    phoneMesh = phoneGroup;
     phoneMesh.userData = { type: 'phone', promptText: 'هاتف ذكي', pickable: true, invName: 'هاتف', invIcon: '📱' };
-    phoneMesh.castShadow = true;
-    scene.add(phoneMesh);
     interactiveObjects.push(phoneMesh);
-
-    // Phone screen glow
-    const phoneScreen = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.06, 0.1),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a2e, emissive: 0x112244, emissiveIntensity: 0.3 })
-    );
-    phoneScreen.position.set(3.3, 0.77, 1.5);
-    phoneScreen.rotation.x = -Math.PI / 2;
-    scene.add(phoneScreen);
 
     // === Puzzle 3: Abstract painting on wall ===
     const paintingCanvas = document.createElement('canvas');
@@ -676,11 +771,17 @@ function buildPuzzleObjects() {
     }
 
     const paintTex = new THREE.CanvasTexture(paintingCanvas);
+
+    // Load fancy picture frame from Poly Haven
+    loadModel('fancy_picture_frame_01/fancy_picture_frame_01.gltf',
+        { x: -ROOM_W / 2 + 0.05, y: 1.8, z: 0.5 }, 1.5, { y: Math.PI / 2 });
+
+    // Painting canvas with puzzle (on top of frame)
     paintingMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.8, 0.8),
+        new THREE.PlaneGeometry(0.65, 0.50),
         new THREE.MeshStandardMaterial({ map: paintTex, roughness: 0.8 })
     );
-    paintingMesh.position.set(-ROOM_W / 2 + 0.02, 1.8, 0.5);
+    paintingMesh.position.set(-ROOM_W / 2 + 0.06, 1.8, 0.5);
     paintingMesh.rotation.y = Math.PI / 2;
     paintingMesh.userData = { type: 'painting', promptText: 'لوحة تجريدية' };
     scene.add(paintingMesh);
@@ -699,57 +800,63 @@ function buildPuzzleObjects() {
     interactiveObjects.push(filterMesh);
 
     // === Puzzle 4: Black cup and coffee machine ===
-    // Coffee machine - more detailed
+    // Coffee machine - detailed mesh
     const cmGroup = new THREE.Group();
     const cmBody = new THREE.Mesh(
         new THREE.BoxGeometry(0.25, 0.32, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.5 })
+        new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.15, metalness: 0.6 })
     );
     cmBody.position.y = 0.16;
     cmGroup.add(cmBody);
-
-    // Water tank on top
+    const cmTop = new THREE.Mesh(
+        new THREE.BoxGeometry(0.26, 0.02, 0.21),
+        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.1, metalness: 0.7 })
+    );
+    cmTop.position.set(0, 0.33, 0);
+    cmGroup.add(cmTop);
     const cmTank = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.1, 0.12),
-        new THREE.MeshStandardMaterial({ color: 0x335577, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.7 })
+        new THREE.BoxGeometry(0.16, 0.12, 0.1),
+        new THREE.MeshStandardMaterial({ color: 0x335577, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.6 })
     );
-    cmTank.position.set(0, 0.37, -0.02);
+    cmTank.position.set(0, 0.4, -0.02);
     cmGroup.add(cmTank);
-
-    // Drip tray
     const cmTray = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.015, 0.15),
-        new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.6, roughness: 0.3 })
+        new THREE.BoxGeometry(0.2, 0.012, 0.15),
+        new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.15 })
     );
-    cmTray.position.set(0, 0.008, 0.03);
+    cmTray.position.set(0, 0.006, 0.03);
     cmGroup.add(cmTray);
-
-    // Nozzle
     const nozzle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.015, 0.02, 0.06, 8),
-        new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8, roughness: 0.2 })
+        new THREE.CylinderGeometry(0.012, 0.018, 0.06, 10),
+        new THREE.MeshStandardMaterial({ color: 0x777777, metalness: 0.9, roughness: 0.1 })
     );
     nozzle.position.set(0, 0.06, 0.03);
     cmGroup.add(nozzle);
-
-    // Button
     const cmBtn = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.015, 0.015, 0.01, 12),
-        new THREE.MeshStandardMaterial({ color: 0x22aa22, emissive: 0x115511, emissiveIntensity: 0.5 })
+        new THREE.CylinderGeometry(0.012, 0.012, 0.008, 12),
+        new THREE.MeshStandardMaterial({ color: 0x22cc22, emissive: 0x116611, emissiveIntensity: 0.8, metalness: 0.3 })
     );
     cmBtn.position.set(0.08, 0.25, 0.101);
     cmBtn.rotation.x = Math.PI / 2;
     cmGroup.add(cmBtn);
+    // Side panel detail
+    const cmSide = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.18, 0.25),
+        new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.4, roughness: 0.3 })
+    );
+    cmSide.position.set(0.126, 0.16, 0);
+    cmSide.rotation.y = Math.PI / 2;
+    cmGroup.add(cmSide);
 
-    cmGroup.position.set(-3.5, 0.82, -3);
+    cmGroup.position.set(-3.5, 0.42, -3);
     cmGroup.castShadow = true;
     scene.add(cmGroup);
     coffeeMachineMesh = cmGroup;
     coffeeMachineMesh.userData = { type: 'coffeeMachine', promptText: 'آلة صنع قهوة' };
     interactiveObjects.push(coffeeMachineMesh);
 
-    // Black cup
-    cupMesh = createCup(-3.2, 0.82, -3);
+    // Black cup - detailed ceramic
+    cupMesh = createCup(-3.2, 0.42, -3);
     cupMesh.userData = { type: 'cup', promptText: 'كوب أسود', pickable: true, invName: 'كوب', invIcon: '☕' };
     interactiveObjects.push(cupMesh);
 
@@ -782,38 +889,45 @@ function buildPuzzleObjects() {
     sculptureMesh.userData = { type: 'sculpture', promptText: 'مجسم معدني', pickable: true, invName: 'مجسم', invIcon: '🗿' };
     interactiveObjects.push(sculptureMesh);
 
-    // Desk lamp
-    deskLampMesh = createDeskLamp(ROOM_W / 2 - 0.5, 0.77, -0.8);
-    deskLampMesh.userData = { type: 'deskLamp', promptText: 'مصباح مكتب' };
-    interactiveObjects.push(deskLampMesh);
+    // Desk lamp - load Poly Haven GLTF model
+    loadModel('desk_lamp_arm_01/desk_lamp_arm_01.gltf',
+        { x: ROOM_W / 2 - 0.5, y: 0.62, z: -0.8 }, 0.4, { y: Math.PI }, (model) => {
+            if (model) {
+                deskLampMesh = model;
+                deskLampMesh.userData = { type: 'deskLamp', promptText: 'مصباح مكتب' };
+                interactiveObjects.push(deskLampMesh);
+            }
+        });
+    // Fallback hitbox in case model takes time to load
+    const lampHitbox = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.3, 0.2),
+        new THREE.MeshStandardMaterial({ visible: false })
+    );
+    lampHitbox.position.set(ROOM_W / 2 - 0.5, 0.92, -0.8);
+    lampHitbox.userData = { type: 'deskLamp', promptText: 'مصباح مكتب' };
+    scene.add(lampHitbox);
+    interactiveObjects.push(lampHitbox);
+    deskLampMesh = lampHitbox;
 
-    // === Puzzle 6: Classic radio ===
-    radioMesh = new THREE.Mesh(
+    // === Puzzle 6: Classic radio - load Poly Haven vintage_radio_transceiver ===
+    loadModel('vintage_radio_transceiver/vintage_radio_transceiver.gltf',
+        { x: 3, y: 0.35, z: 3 }, 2.5, { y: 0 }, (model) => {
+            if (model) {
+                radioMesh = model;
+                radioMesh.userData = { type: 'radio', promptText: 'راديو كلاسيكي' };
+                interactiveObjects.push(radioMesh);
+            }
+        });
+    // Fallback hitbox for radio
+    const radioHitbox = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.2, 0.15),
-        new THREE.MeshStandardMaterial({ color: 0x5a3d2b, roughness: 0.5 })
+        new THREE.MeshStandardMaterial({ visible: false })
     );
-    radioMesh.position.set(3, 0.7, 3);
-    radioMesh.userData = { type: 'radio', promptText: 'راديو كلاسيكي' };
-    radioMesh.castShadow = true;
-    scene.add(radioMesh);
-    interactiveObjects.push(radioMesh);
-
-    // Radio speaker grille
-    const grille = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.15, 0.12),
-        new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 })
-    );
-    grille.position.set(3, 0.72, 3 + 0.076);
-    scene.add(grille);
-
-    // Radio dial
-    const dial = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8),
-        new THREE.MeshStandardMaterial({ color: 0xccaa00, metalness: 0.7 })
-    );
-    dial.position.set(3 + 0.1, 0.72, 3 + 0.076);
-    dial.rotation.x = Math.PI / 2;
-    scene.add(dial);
+    radioHitbox.position.set(3, 0.5, 3);
+    radioHitbox.userData = { type: 'radio', promptText: 'راديو كلاسيكي' };
+    scene.add(radioHitbox);
+    interactiveObjects.push(radioHitbox);
+    radioMesh = radioHitbox;
 
     // FM hint note (stuck somewhere)
     const hintCanvas = document.createElement('canvas');
@@ -996,51 +1110,52 @@ function buildRedHerrings() {
 
 // ============= LIGHTS =============
 function setupLights() {
-    // Strong ambient for well-lit room
-    const ambient = new THREE.AmbientLight(0xffeedd, 1.2);
+    // Dim ambient for mysterious atmosphere
+    const ambient = new THREE.AmbientLight(0x332222, 0.4);
     scene.add(ambient);
 
-    // Hemisphere light for natural fill
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x886644, 0.8);
+    // Hemisphere light: warm top, cool bottom (simulates indoor bounce)
+    const hemi = new THREE.HemisphereLight(0x8b7355, 0x1a1a2a, 0.3);
     scene.add(hemi);
 
-    // Main ceiling light (center)
-    const ceiling = new THREE.PointLight(0xffeecc, 1.5, 20);
+    // Main ceiling light (center) - warm tungsten bulb
+    const ceiling = new THREE.PointLight(0xffaa55, 1.2, 12);
     ceiling.position.set(0, ROOM_H - 0.2, 0);
     ceiling.castShadow = true;
     ceiling.shadow.mapSize.set(512, 512);
+    ceiling.shadow.bias = -0.002;
     scene.add(ceiling);
 
-    // Light bulb mesh
-    const bulb = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08, 12, 12),
-        new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 3, color: 0xffffee })
-    );
+    // Light bulb mesh with glow
+    const bulbMat = new THREE.MeshStandardMaterial({ emissive: 0xffaa44, emissiveIntensity: 4, color: 0xffffcc, transparent: true, opacity: 0.9 });
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), bulbMat);
     bulb.position.copy(ceiling.position);
     scene.add(bulb);
 
-    // Secondary ceiling lights for even coverage
-    const ceil2 = new THREE.PointLight(0xffeecc, 1.0, 15);
-    ceil2.position.set(-3, ROOM_H - 0.3, -2);
+    // Subtle ceiling light near back wall
+    const ceil2 = new THREE.PointLight(0xffaa55, 0.6, 8);
+    ceil2.position.set(-2, ROOM_H - 0.3, -2.5);
     scene.add(ceil2);
-    const bulb2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 2 }));
-    bulb2.position.copy(ceil2.position);
-    scene.add(bulb2);
 
-    const ceil3 = new THREE.PointLight(0xffeecc, 1.0, 15);
-    ceil3.position.set(3, ROOM_H - 0.3, 2);
+    // Subtle ceiling light near front
+    const ceil3 = new THREE.PointLight(0xffaa55, 0.4, 8);
+    ceil3.position.set(2, ROOM_H - 0.3, 2);
     scene.add(ceil3);
-    const bulb3 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshStandardMaterial({ emissive: 0xffeedd, emissiveIntensity: 2 }));
-    bulb3.position.copy(ceil3.position);
-    scene.add(bulb3);
 
-    const ceil4 = new THREE.PointLight(0xffeecc, 0.8, 12);
-    ceil4.position.set(-3, ROOM_H - 0.3, 2);
-    scene.add(ceil4);
+    // Decorative warm spot near desk area
+    const deskSpot = new THREE.SpotLight(0xffcc88, 0.8, 6, Math.PI / 6, 0.5);
+    deskSpot.position.set(3.5, ROOM_H - 0.3, 1.5);
+    deskSpot.target.position.set(3.5, 0, 1.5);
+    scene.add(deskSpot);
+    scene.add(deskSpot.target);
 
-    const ceil5 = new THREE.PointLight(0xffeecc, 0.8, 12);
-    ceil5.position.set(3, ROOM_H - 0.3, -2);
-    scene.add(ceil5);
+    // Load and add vintage oil lamp model for ambiance
+    loadModel('vintage_oil_lamp/vintage_oil_lamp.gltf',
+        { x: -2.5, y: 0.73, z: -1 }, 0.5, { y: 0 });
+    // Small point light near oil lamp
+    const oilLampLight = new THREE.PointLight(0xff8833, 0.4, 3);
+    oilLampLight.position.set(-2.5, 0.95, -1);
+    scene.add(oilLampLight);
 
     // Spotlight for mirror puzzle (white light on floor)
     lightSpotlight = new THREE.SpotLight(0xffffff, 1.5, 8, Math.PI / 8, 0.3);
