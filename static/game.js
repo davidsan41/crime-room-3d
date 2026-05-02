@@ -213,6 +213,7 @@ function init3D() {
     buildRedHerrings();
     setupLights();
     setupControls();
+    setupPhoneCamera();
 
     window.addEventListener('resize', onResize);
     animate();
@@ -439,22 +440,50 @@ function loadModel(path, position, scale, rotation, callback) {
     });
 }
 
+// ============= DECORATIVE BOOKS =============
+function addBooksToBookshelf(bsX, bsZ) {
+    const bookColors = [0xaa2222, 0x2244aa, 0x22aa44, 0xaa8822, 0x7722aa, 0x22aaaa, 0xaa4400, 0x6644aa, 0x884422, 0x224488];
+    const shelfYs = [0.08, 0.55, 1.05, 1.55];
+    shelfYs.forEach((baseY, shelfIdx) => {
+        const numBooks = 5 + Math.floor(Math.random() * 4);
+        let bx = -0.55;
+        for (let i = 0; i < numBooks; i++) {
+            const bw = 0.04 + Math.random() * 0.04;
+            const bh = 0.22 + Math.random() * 0.15;
+            const bd = 0.16 + Math.random() * 0.06;
+            const color = bookColors[(i + shelfIdx * 3) % bookColors.length];
+            const book = new THREE.Mesh(
+                new THREE.BoxGeometry(bw, bh, bd),
+                new THREE.MeshStandardMaterial({ color: color, roughness: 0.7, metalness: 0.05 })
+            );
+            // Books oriented along the shelf depth (Z)
+            book.position.set(bsX, baseY + bh / 2 + 0.02, bsZ + bx);
+            book.rotation.z = (Math.random() - 0.5) * 0.06;
+            book.castShadow = true;
+            scene.add(book);
+            bx += bw + 0.008;
+        }
+    });
+}
+
 // ============= FURNITURE =============
 function buildFurniture() {
     // === Main table (center-left) - uses Poly Haven round_wooden_table ===
+    // Model height ~1.0 at scale 1.0, so at scale 0.8 top is at ~0.80
     loadModel('round_wooden_table_01/round_wooden_table_01.gltf',
-        { x: -2.5, y: 0, z: -1 }, 0.85, { y: 0 });
+        { x: -2.5, y: 0, z: -1 }, 0.8, { y: 0 });
 
     // === Drawer cabinet / desk (right side) ===
+    // Model height ~1.88 at scale 1.0, too tall. Use scale 0.45 → top ~0.85
     loadModel('drawer_cabinet/drawer_cabinet.gltf',
-        { x: 3.5, y: 0, z: 1.5 }, 1.0, { y: Math.PI / 2 }, (model) => {
+        { x: 3.5, y: 0, z: 1.5 }, 0.45, { y: Math.PI / 2 }, (model) => {
             if (model) {
-                // Add interactive drawer hitbox on top of the cabinet
+                // Add interactive drawer hitbox
                 const drawerHitbox = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.5, 0.15, 0.4),
+                    new THREE.BoxGeometry(0.5, 0.3, 0.4),
                     new THREE.MeshStandardMaterial({ visible: false })
                 );
-                drawerHitbox.position.set(3.5, 0.55, 1.5);
+                drawerHitbox.position.set(3.5, 0.4, 1.5);
                 drawerHitbox.userData = { type: 'drawer', promptText: 'درج المكتب', hasLighter: true };
                 scene.add(drawerHitbox);
                 interactiveObjects.push(drawerHitbox);
@@ -462,25 +491,32 @@ function buildFurniture() {
         });
 
     // === Shelf on left wall - using small_wooden_table as shelf ===
+    // Model height ~0.53 at scale 1.0, at scale 1.8 → top ~0.96 (waist height shelf)
     loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
-        { x: -ROOM_W / 2 + 0.5, y: 0, z: -1.5 }, 0.6, { y: Math.PI / 2 });
+        { x: -ROOM_W / 2 + 0.5, y: 0, z: -1.5 }, 1.8, { y: Math.PI / 2 });
 
     // === Small table for coffee machine (back-left) ===
+    // Model height ~0.53 at scale 1.5 → top ~0.80
     loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
-        { x: -3.5, y: 0, z: -3 }, 0.5, { y: 0 });
+        { x: -3.5, y: 0, z: -3 }, 1.5, { y: 0 });
 
     // === Table for radio (front-right) ===
+    // Model height ~0.53 at scale 1.4 → top ~0.74
     loadModel('small_wooden_table_01/small_wooden_table_01.gltf',
-        { x: 3, y: 0, z: 3 }, 0.45, { y: Math.PI / 4 });
+        { x: 3, y: 0, z: 3 }, 1.4, { y: Math.PI / 4 });
 
     // === Table for lamp + sculpture (right wall) ===
+    // Model height ~1.0 at scale 0.75 → top ~0.75
     loadModel('round_wooden_table_01/round_wooden_table_01.gltf',
-        { x: ROOM_W / 2 - 0.8, y: 0, z: -0.5 }, 0.6, { y: 0 });
+        { x: ROOM_W / 2 - 0.8, y: 0, z: -0.5 }, 0.75, { y: 0 });
 
     // === Bookshelf (front-left) - Poly Haven worn bookshelf ===
+    // Model height ~2.06, at scale 1.0 fits well
     loadModel('wooden_bookshelf_worn/wooden_bookshelf_worn.gltf',
         { x: -ROOM_W / 2 + 0.35, y: 0, z: 2.5 }, 1.0, { y: Math.PI / 2 }, (model) => {
             if (model) {
+                // Add decorative books on shelves
+                addBooksToBookshelf(-ROOM_W / 2 + 0.35, 2.5);
                 // Add interactive book hitbox
                 const bookHitbox = new THREE.Mesh(
                     new THREE.BoxGeometry(0.15, 0.25, 0.2),
@@ -492,6 +528,17 @@ function buildFurniture() {
                 interactiveObjects.push(bookHitbox);
             }
         });
+
+    // === Add UV wall hitbox for phone puzzle ===
+    const uvWallHitbox = new THREE.Mesh(
+        new THREE.PlaneGeometry(3, 2.5),
+        new THREE.MeshStandardMaterial({ visible: false, side: THREE.DoubleSide })
+    );
+    uvWallHitbox.position.set(0, 1.5, ROOM_D / 2 - 0.05);
+    uvWallHitbox.rotation.y = Math.PI;
+    uvWallHitbox.userData = { type: 'uvWall', promptText: 'حائط... ربما يخفي شيئاً' };
+    scene.add(uvWallHitbox);
+    interactiveObjects.push(uvWallHitbox);
 }
 
 function createTable(x, y, z, w, h, d, mat) {
@@ -674,7 +721,7 @@ function buildPuzzleObjects() {
         new THREE.BoxGeometry(0.12, 0.01, 0.08),
         new THREE.MeshStandardMaterial({ color: 0xaaccee, metalness: 0.9, roughness: 0.1 })
     );
-    hiddenMirror.position.set(-ROOM_W / 2 + 0.5, 1.15, -1.3);
+    hiddenMirror.position.set(-ROOM_W / 2 + 0.5, 0.99, -1.3);
     hiddenMirror.userData = { type: 'hiddenMirror', mirrorIndex: 2, promptText: 'مرآة صغيرة' };
     scene.add(hiddenMirror);
     interactiveObjects.push(hiddenMirror);
@@ -684,7 +731,7 @@ function buildPuzzleObjects() {
         new THREE.PlaneGeometry(0.2, 0.28),
         new THREE.MeshStandardMaterial({ color: 0xf5f0e0, roughness: 0.9, side: THREE.DoubleSide })
     );
-    paperMesh.position.set(-2.5, 0.77, -1);
+    paperMesh.position.set(-2.5, 0.82, -1);
     paperMesh.rotation.x = -Math.PI / 2;
     paperMesh.userData = { type: 'paper', promptText: 'ورقة بيضاء', pickable: true, invName: 'ورقة', invIcon: '📄' };
     paperMesh.castShadow = true;
@@ -712,7 +759,7 @@ function buildPuzzleObjects() {
     phoneCam.position.set(-0.02, 0.005, -0.06);
     phoneCam.rotation.x = Math.PI / 2;
     phoneGroup.add(phoneCam);
-    phoneGroup.position.set(3.3, 0.76, 1.5);
+    phoneGroup.position.set(3.3, 0.87, 1.5);
     phoneGroup.castShadow = true;
     scene.add(phoneGroup);
     phoneMesh = phoneGroup;
@@ -720,53 +767,52 @@ function buildPuzzleObjects() {
     interactiveObjects.push(phoneMesh);
 
     // === Puzzle 3: Abstract painting on wall ===
+    // Strategy: Paint is all in red/warm tones. The number is drawn in cyan (opposite of red).
+    // Both blend together visually. The red filter removes red and reveals cyan number as dark.
     const paintingCanvas = document.createElement('canvas');
-    paintingCanvas.width = 200;
-    paintingCanvas.height = 200;
+    paintingCanvas.width = 256;
+    paintingCanvas.height = 256;
     const pCtx = paintingCanvas.getContext('2d');
-    // Chaotic lines background
-    pCtx.fillStyle = '#f0e8d0';
-    pCtx.fillRect(0, 0, 200, 200);
-    // Draw many colorful chaotic lines including lots of red lines to camouflage the number
-    for (let i = 0; i < 120; i++) {
-        const hue = Math.random() * 360;
-        pCtx.strokeStyle = `hsl(${hue}, 70%, 50%)`;
-        pCtx.lineWidth = 1 + Math.random() * 4;
+    // Dark warm background
+    pCtx.fillStyle = '#8b4513';
+    pCtx.fillRect(0, 0, 256, 256);
+    // Many chaotic lines in reds, oranges, yellows, browns
+    for (let i = 0; i < 200; i++) {
+        const r = 120 + Math.floor(Math.random() * 135);
+        const g = Math.floor(Math.random() * 80);
+        const b = Math.floor(Math.random() * 50);
+        pCtx.strokeStyle = `rgb(${r},${g},${b})`;
+        pCtx.lineWidth = 2 + Math.random() * 5;
         pCtx.beginPath();
-        pCtx.moveTo(Math.random() * 200, Math.random() * 200);
+        pCtx.moveTo(Math.random() * 256, Math.random() * 256);
         pCtx.bezierCurveTo(
-            Math.random() * 200, Math.random() * 200,
-            Math.random() * 200, Math.random() * 200,
-            Math.random() * 200, Math.random() * 200
+            Math.random() * 256, Math.random() * 256,
+            Math.random() * 256, Math.random() * 256,
+            Math.random() * 256, Math.random() * 256
         );
         pCtx.stroke();
     }
-    // Extra red chaotic lines to fully camouflage the hidden number
-    for (let i = 0; i < 40; i++) {
-        pCtx.strokeStyle = `hsl(${Math.random() * 20 + 350}, ${60 + Math.random() * 30}%, ${40 + Math.random() * 25}%)`;
-        pCtx.lineWidth = 1 + Math.random() * 3;
-        pCtx.beginPath();
-        pCtx.moveTo(Math.random() * 200, Math.random() * 200);
-        pCtx.bezierCurveTo(
-            Math.random() * 200, Math.random() * 200,
-            Math.random() * 200, Math.random() * 200,
-            Math.random() * 200, Math.random() * 200
-        );
-        pCtx.stroke();
-    }
-    // Hidden number drawn in red - completely buried under the red chaotic lines
-    pCtx.fillStyle = 'rgba(200,50,50,0.6)';
-    pCtx.font = 'bold 80px Arial';
+    // Draw number in a color that is invisible among the chaos but revealed by red filter
+    // Number in same red/brown color as background - invisible to the eye
+    pCtx.fillStyle = 'rgba(139, 69, 19, 0.95)';
+    pCtx.font = 'bold 100px Arial';
     pCtx.textAlign = 'center';
     pCtx.textBaseline = 'middle';
-    pCtx.fillText(PUZZLE_DIGITS[2], 100, 100);
-    // Cover with more chaotic lines to further hide
-    for (let i = 0; i < 30; i++) {
-        pCtx.strokeStyle = `hsl(${Math.random() * 360}, 70%, 50%)`;
-        pCtx.lineWidth = 1 + Math.random() * 2;
+    pCtx.fillText(PUZZLE_DIGITS[2], 128, 128);
+    // More chaotic lines over the number to further hide it
+    for (let i = 0; i < 60; i++) {
+        const r = 130 + Math.floor(Math.random() * 125);
+        const g = 20 + Math.floor(Math.random() * 60);
+        const b = Math.floor(Math.random() * 40);
+        pCtx.strokeStyle = `rgb(${r},${g},${b})`;
+        pCtx.lineWidth = 1 + Math.random() * 3;
         pCtx.beginPath();
-        pCtx.moveTo(Math.random() * 200, Math.random() * 200);
-        pCtx.lineTo(Math.random() * 200, Math.random() * 200);
+        pCtx.moveTo(Math.random() * 256, Math.random() * 256);
+        pCtx.bezierCurveTo(
+            Math.random() * 256, Math.random() * 256,
+            Math.random() * 256, Math.random() * 256,
+            Math.random() * 256, Math.random() * 256
+        );
         pCtx.stroke();
     }
 
@@ -848,7 +894,7 @@ function buildPuzzleObjects() {
     cmSide.rotation.y = Math.PI / 2;
     cmGroup.add(cmSide);
 
-    cmGroup.position.set(-3.5, 0.42, -3);
+    cmGroup.position.set(-3.5, 0.80, -3);
     cmGroup.castShadow = true;
     scene.add(cmGroup);
     coffeeMachineMesh = cmGroup;
@@ -856,7 +902,7 @@ function buildPuzzleObjects() {
     interactiveObjects.push(coffeeMachineMesh);
 
     // Black cup - detailed ceramic
-    cupMesh = createCup(-3.2, 0.42, -3);
+    cupMesh = createCup(-3.2, 0.80, -3);
     cupMesh.userData = { type: 'cup', promptText: 'كوب أسود', pickable: true, invName: 'كوب', invIcon: '☕' };
     interactiveObjects.push(cupMesh);
 
@@ -868,7 +914,7 @@ function buildPuzzleObjects() {
             color: 0xff0000, transparent: true, opacity: 0.6, side: THREE.DoubleSide
         })
     );
-    xMarkMesh.position.set(ROOM_W / 2 - 0.8, 0.77, -0.5);
+    xMarkMesh.position.set(ROOM_W / 2 - 0.8, 0.76, -0.5);
     xMarkMesh.rotation.x = -Math.PI / 2;
     scene.add(xMarkMesh);
 
@@ -885,13 +931,13 @@ function buildPuzzleObjects() {
     xMarkMesh.material.needsUpdate = true;
 
     // Metal sculpture
-    sculptureMesh = createSculpture(ROOM_W / 2 - 1.5, 0.77, 0.5);
+    sculptureMesh = createSculpture(ROOM_W / 2 - 1.5, 0.76, 0.5);
     sculptureMesh.userData = { type: 'sculpture', promptText: 'مجسم معدني', pickable: true, invName: 'مجسم', invIcon: '🗿' };
     interactiveObjects.push(sculptureMesh);
 
     // Desk lamp - load Poly Haven GLTF model
     loadModel('desk_lamp_arm_01/desk_lamp_arm_01.gltf',
-        { x: ROOM_W / 2 - 0.5, y: 0.62, z: -0.8 }, 0.4, { y: Math.PI }, (model) => {
+        { x: ROOM_W / 2 - 0.5, y: 0.75, z: -0.8 }, 0.35, { y: Math.PI }, (model) => {
             if (model) {
                 deskLampMesh = model;
                 deskLampMesh.userData = { type: 'deskLamp', promptText: 'مصباح مكتب' };
@@ -903,7 +949,7 @@ function buildPuzzleObjects() {
         new THREE.BoxGeometry(0.2, 0.3, 0.2),
         new THREE.MeshStandardMaterial({ visible: false })
     );
-    lampHitbox.position.set(ROOM_W / 2 - 0.5, 0.92, -0.8);
+    lampHitbox.position.set(ROOM_W / 2 - 0.5, 1.0, -0.8);
     lampHitbox.userData = { type: 'deskLamp', promptText: 'مصباح مكتب' };
     scene.add(lampHitbox);
     interactiveObjects.push(lampHitbox);
@@ -911,7 +957,7 @@ function buildPuzzleObjects() {
 
     // === Puzzle 6: Classic radio - load Poly Haven vintage_radio_transceiver ===
     loadModel('vintage_radio_transceiver/vintage_radio_transceiver.gltf',
-        { x: 3, y: 0.35, z: 3 }, 2.5, { y: 0 }, (model) => {
+        { x: 3, y: 0.75, z: 3 }, 2.0, { y: 0 }, (model) => {
             if (model) {
                 radioMesh = model;
                 radioMesh.userData = { type: 'radio', promptText: 'راديو كلاسيكي' };
@@ -923,7 +969,7 @@ function buildPuzzleObjects() {
         new THREE.BoxGeometry(0.3, 0.2, 0.15),
         new THREE.MeshStandardMaterial({ visible: false })
     );
-    radioHitbox.position.set(3, 0.5, 3);
+    radioHitbox.position.set(3, 0.85, 3);
     radioHitbox.userData = { type: 'radio', promptText: 'راديو كلاسيكي' };
     scene.add(radioHitbox);
     interactiveObjects.push(radioHitbox);
@@ -1087,12 +1133,12 @@ function updateBeamVisualization() {
 // ============= RED HERRINGS =============
 function buildRedHerrings() {
     const items = [
-        { geo: new THREE.CylinderGeometry(0.03, 0.025, 0.08, 8), color: 0x888888, pos: [-1, 0.79, -1], name: 'كوب فارغ', icon: '🥤' },
-        { geo: new THREE.BoxGeometry(0.02, 0.08, 0.06), color: 0xccaa00, pos: [3.6, 0.78, 1.3], name: 'مفتاح قديم', icon: '🔑' },
-        { geo: new THREE.BoxGeometry(0.15, 0.01, 0.2), color: 0x4444aa, pos: [-2.2, 0.77, -0.8], name: 'مجلد فارغ', icon: '📁' },
-        { geo: new THREE.BoxGeometry(0.06, 0.08, 0.04), color: 0x228822, pos: [3.8, 0.78, 1.7], name: 'علبة صغيرة', icon: '📦' },
-        { geo: new THREE.SphereGeometry(0.03, 8, 8), color: 0xff4444, pos: [-3, 0.85, -2.8], name: 'كرة زجاجية', icon: '🔮' },
-        { geo: new THREE.CylinderGeometry(0.015, 0.015, 0.12, 6), color: 0x333333, pos: [2, 0.77, -2], name: 'قلم', icon: '✏️' },
+        { geo: new THREE.CylinderGeometry(0.03, 0.025, 0.08, 8), color: 0x888888, pos: [-2.3, 0.84, -0.8], name: 'كوب فارغ', icon: '🥤' },
+        { geo: new THREE.BoxGeometry(0.02, 0.08, 0.06), color: 0xccaa00, pos: [3.6, 0.88, 1.3], name: 'مفتاح قديم', icon: '🔑' },
+        { geo: new THREE.BoxGeometry(0.15, 0.01, 0.2), color: 0x4444aa, pos: [-2.2, 0.82, -1.2], name: 'مجلد فارغ', icon: '📁' },
+        { geo: new THREE.BoxGeometry(0.06, 0.08, 0.04), color: 0x228822, pos: [3.8, 0.88, 1.7], name: 'علبة صغيرة', icon: '📦' },
+        { geo: new THREE.SphereGeometry(0.03, 8, 8), color: 0xff4444, pos: [-3.3, 0.85, -2.8], name: 'كرة زجاجية', icon: '🔮' },
+        { geo: new THREE.CylinderGeometry(0.015, 0.015, 0.12, 6), color: 0x333333, pos: [-2.7, 0.82, -1], name: 'قلم', icon: '✏️' },
     ];
 
     items.forEach(item => {
@@ -1110,12 +1156,12 @@ function buildRedHerrings() {
 
 // ============= LIGHTS =============
 function setupLights() {
-    // Dim ambient for mysterious atmosphere
-    const ambient = new THREE.AmbientLight(0x332222, 0.4);
+    // Ambient for atmospheric room - enough to see, but not overly bright
+    const ambient = new THREE.AmbientLight(0x443322, 0.6);
     scene.add(ambient);
 
     // Hemisphere light: warm top, cool bottom (simulates indoor bounce)
-    const hemi = new THREE.HemisphereLight(0x8b7355, 0x1a1a2a, 0.3);
+    const hemi = new THREE.HemisphereLight(0x8b7355, 0x2a2a3a, 0.5);
     scene.add(hemi);
 
     // Main ceiling light (center) - warm tungsten bulb
@@ -1151,10 +1197,10 @@ function setupLights() {
 
     // Load and add vintage oil lamp model for ambiance
     loadModel('vintage_oil_lamp/vintage_oil_lamp.gltf',
-        { x: -2.5, y: 0.73, z: -1 }, 0.5, { y: 0 });
+        { x: -2.5, y: 0.80, z: -0.7 }, 0.4, { y: 0 });
     // Small point light near oil lamp
-    const oilLampLight = new THREE.PointLight(0xff8833, 0.4, 3);
-    oilLampLight.position.set(-2.5, 0.95, -1);
+    const oilLampLight = new THREE.PointLight(0xff8833, 0.5, 4);
+    oilLampLight.position.set(-2.5, 1.1, -0.7);
     scene.add(oilLampLight);
 
     // Spotlight for mirror puzzle (white light on floor)
@@ -1319,6 +1365,8 @@ function tryInteract() {
         case 'phone':
             if (data.pickable && !hasItem('هاتف')) {
                 pickupItem(obj, data);
+            } else if (hasItem('هاتف')) {
+                openPhoneCamera();
             }
             break;
         case 'redFilter':
@@ -1424,13 +1472,106 @@ function pickupItem(mesh, data) {
     showNotification(`التقطت: ${data.invName}`);
 }
 
+function drawItemIcon(name) {
+    const c = document.createElement('canvas');
+    c.width = 48; c.height = 48;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 48, 48);
+
+    switch(name) {
+        case 'ورقة':
+            ctx.fillStyle = '#f5f0e0'; ctx.fillRect(10, 6, 28, 36);
+            ctx.strokeStyle = '#aaa'; ctx.lineWidth = 0.5;
+            for (let y = 14; y < 38; y += 4) { ctx.beginPath(); ctx.moveTo(14, y); ctx.lineTo(34, y); ctx.stroke(); }
+            ctx.fillStyle = '#c5b896'; ctx.beginPath(); ctx.moveTo(28, 6); ctx.lineTo(38, 16); ctx.lineTo(28, 16); ctx.fill();
+            break;
+        case 'ولاعة':
+            ctx.fillStyle = '#b8b8b8'; ctx.fillRect(18, 12, 12, 28);
+            ctx.fillStyle = '#888'; ctx.fillRect(18, 12, 12, 6);
+            ctx.fillStyle = '#ff8c00'; ctx.beginPath(); ctx.moveTo(24, 12); ctx.quadraticCurveTo(20, 4, 24, 2); ctx.quadraticCurveTo(28, 4, 24, 12); ctx.fill();
+            break;
+        case 'هاتف':
+            ctx.fillStyle = '#222'; ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+            ctx.fillRect(14, 4, 20, 40); ctx.strokeRect(14, 4, 20, 40);
+            ctx.fillStyle = '#1a2a44'; ctx.fillRect(16, 8, 16, 28);
+            ctx.fillStyle = '#555'; ctx.beginPath(); ctx.arc(24, 40, 1.5, 0, Math.PI * 2); ctx.fill();
+            break;
+        case 'فلتر أحمر':
+            ctx.fillStyle = 'rgba(220, 20, 20, 0.5)'; ctx.fillRect(8, 8, 32, 32);
+            ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2; ctx.strokeRect(8, 8, 32, 32);
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.3)'; ctx.fillRect(10, 10, 28, 28);
+            break;
+        case 'كوب':
+            ctx.fillStyle = '#333'; ctx.beginPath();
+            ctx.moveTo(16, 14); ctx.lineTo(14, 40); ctx.lineTo(34, 40); ctx.lineTo(32, 14); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(36, 26, 6, -0.5, 1.5); ctx.stroke();
+            break;
+        case 'مجسم':
+            ctx.fillStyle = '#888'; ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(24, 6); ctx.lineTo(14, 20); ctx.lineTo(18, 22); ctx.lineTo(24, 14); ctx.lineTo(30, 22); ctx.lineTo(34, 20); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#777'; ctx.fillRect(20, 22, 8, 16);
+            ctx.fillStyle = '#666'; ctx.fillRect(14, 38, 20, 4);
+            break;
+        case 'كوب فارغ':
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(16, 14); ctx.lineTo(14, 40); ctx.lineTo(34, 40); ctx.lineTo(32, 14); ctx.closePath(); ctx.stroke();
+            break;
+        case 'مفتاح قديم':
+            ctx.fillStyle = '#ccaa00'; ctx.strokeStyle = '#aa8800'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(24, 14, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(24, 14, 3, 0, Math.PI * 2); ctx.strokeStyle = '#886600'; ctx.stroke();
+            ctx.fillRect(22, 20, 4, 22); ctx.fillRect(22, 34, 8, 3); ctx.fillRect(22, 38, 6, 3);
+            break;
+        case 'مجلد فارغ':
+            ctx.fillStyle = '#4444aa'; ctx.fillRect(8, 10, 32, 28);
+            ctx.fillStyle = '#5555cc'; ctx.fillRect(8, 10, 20, 5);
+            ctx.strokeStyle = '#333388'; ctx.lineWidth = 1; ctx.strokeRect(8, 10, 32, 28);
+            break;
+        case 'علبة صغيرة':
+            ctx.fillStyle = '#228822'; ctx.fillRect(12, 14, 24, 22);
+            ctx.strokeStyle = '#115511'; ctx.lineWidth = 1; ctx.strokeRect(12, 14, 24, 22);
+            ctx.beginPath(); ctx.moveTo(12, 14); ctx.lineTo(18, 8); ctx.lineTo(42, 8); ctx.lineTo(36, 14); ctx.closePath();
+            ctx.fillStyle = '#33aa33'; ctx.fill();
+            break;
+        case 'كرة زجاجية':
+            const rg = ctx.createRadialGradient(22, 20, 2, 24, 24, 12);
+            rg.addColorStop(0, 'rgba(255,200,200,0.8)'); rg.addColorStop(0.5, '#ff4444'); rg.addColorStop(1, '#880000');
+            ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(24, 24, 12, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.arc(20, 18, 3, 0, Math.PI * 2); ctx.fill();
+            break;
+        case 'قلم':
+            ctx.fillStyle = '#333'; ctx.save(); ctx.translate(24, 24); ctx.rotate(-0.5);
+            ctx.fillRect(-2, -18, 4, 32); ctx.fillStyle = '#aa8844'; ctx.fillRect(-2, -18, 4, 4);
+            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.moveTo(-2, 14); ctx.lineTo(2, 14); ctx.lineTo(0, 20); ctx.closePath(); ctx.fill();
+            ctx.restore();
+            break;
+        default:
+            if (name.startsWith('مرآة')) {
+                ctx.fillStyle = '#3a2a18'; ctx.fillRect(12, 8, 24, 32);
+                ctx.fillStyle = '#ccddff'; ctx.fillRect(14, 10, 20, 28);
+                const g = ctx.createLinearGradient(14, 10, 34, 38);
+                g.addColorStop(0, 'rgba(255,255,255,0.4)'); g.addColorStop(1, 'rgba(255,255,255,0.05)');
+                ctx.fillStyle = g; ctx.fillRect(14, 10, 20, 28);
+            } else {
+                ctx.font = '28px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('?', 24, 24);
+            }
+    }
+    return c.toDataURL();
+}
+
 function updateInventoryUI() {
     const container = document.getElementById('inventorySlots');
     container.innerHTML = '';
     state.inventory.forEach(item => {
         const slot = document.createElement('div');
         slot.className = 'inv-slot' + (state.selectedItem === item.name ? ' selected' : '');
-        slot.textContent = item.icon;
+        // Use canvas icon
+        const iconUrl = drawItemIcon(item.name);
+        slot.style.backgroundImage = `url(${iconUrl})`;
+        slot.style.backgroundSize = 'contain';
+        slot.style.backgroundRepeat = 'no-repeat';
+        slot.style.backgroundPosition = 'center';
         slot.title = item.name;
         slot.onclick = () => {
             state.selectedItem = state.selectedItem === item.name ? null : item.name;
@@ -1451,7 +1592,10 @@ function handleItemUse(itemName) {
         solvePuzzle1();
     }
 
-    // Phone + UV Wall interaction handled in tryInteract
+    // Phone selected = open camera view
+    if (state.selectedItem === 'هاتف') {
+        openPhoneCamera();
+    }
 
     // Red filter + painting = reveal number (Puzzle 3)
     if (state.selectedItem === 'فلتر أحمر' && !state.filterApplied) {
@@ -1483,16 +1627,33 @@ function placeMirrorOnBase(index) {
     state.mirrorsPlaced[index] = true;
     removeFromInventory(mirrorNames[selectedMirror]);
 
-    // Show mirror on base
+    // Show mirror on base - realistic glass mirror with frame
     const base = mirrorBases[index];
-    const mirrorVis = new THREE.Mesh(
-        new THREE.BoxGeometry(0.1, 0.12, 0.01),
-        new THREE.MeshStandardMaterial({ color: 0xaaddff, metalness: 0.9, roughness: 0.1 })
+    const mirrorGroup = new THREE.Group();
+    // Mirror glass (highly reflective)
+    const mirrorGlass = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.09, 0.11),
+        new THREE.MeshStandardMaterial({ color: 0xccddff, metalness: 1.0, roughness: 0.02, envMapIntensity: 2.0 })
     );
-    mirrorVis.position.set(base.position.x, 0.12, base.position.z);
-    mirrorVis.rotation.y = base.userData.rotY;
-    scene.add(mirrorVis);
-    mirrorMeshes.push(mirrorVis);
+    mirrorGroup.add(mirrorGlass);
+    // Mirror frame (dark wood)
+    const frameGeo = new THREE.BoxGeometry(0.11, 0.13, 0.012);
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.5, metalness: 0.1 });
+    const mirrorFrame = new THREE.Mesh(frameGeo, frameMat);
+    mirrorFrame.position.z = -0.003;
+    mirrorGroup.add(mirrorFrame);
+    // Mirror back
+    const mirrorBack = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.11, 0.13),
+        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
+    );
+    mirrorBack.position.z = -0.01;
+    mirrorBack.rotation.y = Math.PI;
+    mirrorGroup.add(mirrorBack);
+    mirrorGroup.position.set(base.position.x, 0.12, base.position.z);
+    mirrorGroup.rotation.y = base.userData.rotY;
+    scene.add(mirrorGroup);
+    mirrorMeshes.push(mirrorGroup);
 
     showNotification('تم وضع المرآة!');
     updateBeamVisualization();
@@ -1539,60 +1700,110 @@ function solvePuzzle1() {
 }
 
 // ============= PUZZLE 2: Phone Camera UV =============
+let phoneCameraActive = false;
+let phoneCameraRT, phoneCameraObj, uvNumberMesh;
+
+function setupPhoneCamera() {
+    // Render target for phone camera view
+    phoneCameraRT = new THREE.WebGLRenderTarget(512, 384);
+    phoneCameraObj = new THREE.PerspectiveCamera(60, 512 / 384, 0.1, 20);
+}
+
 function openPhoneCamera() {
     if (state.overlayOpen) return;
     state.overlayOpen = true;
+    phoneCameraActive = true;
     document.getElementById('phoneCameraOverlay').classList.remove('hidden');
     if (isPointerLocked) document.exitPointerLock();
 
-    // Draw UV view on canvas
-    const canvas = document.getElementById('phoneCameraCanvas');
-    const ctx = canvas.getContext('2d');
-
-    // Dark green tint
-    ctx.fillStyle = '#0a2a0a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // UV scan lines
-    for (let y = 0; y < canvas.height; y += 3) {
-        ctx.fillStyle = `rgba(0,255,0,${0.02 + Math.random() * 0.03})`;
-        ctx.fillRect(0, y, canvas.width, 1);
+    // Show UV number on wall (invisible normally, only through phone camera filter)
+    if (!uvNumberMesh) {
+        const uvCanvas = document.createElement('canvas');
+        uvCanvas.width = 256; uvCanvas.height = 256;
+        const ctx = uvCanvas.getContext('2d');
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.clearRect(0, 0, 256, 256);
+        ctx.fillStyle = 'rgba(0,255,100,0.9)';
+        ctx.font = 'bold 200px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#00ff44';
+        ctx.shadowBlur = 20;
+        ctx.fillText(PUZZLE_DIGITS[1], 128, 128);
+        uvNumberMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.5, 1.5),
+            new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(uvCanvas), transparent: true, side: THREE.DoubleSide, depthWrite: false })
+        );
+        uvNumberMesh.position.set(0, 1.8, ROOM_D / 2 - 0.03);
+        uvNumberMesh.rotation.y = Math.PI;
+        uvNumberMesh.visible = false;
+        scene.add(uvNumberMesh);
     }
+    uvNumberMesh.visible = true;
 
-    // Wall texture simulation
-    ctx.fillStyle = 'rgba(0,80,0,0.3)';
-    ctx.fillRect(20, 20, canvas.width - 40, canvas.height - 40);
-
-    // The hidden UV number
-    ctx.fillStyle = 'rgba(0,255,100,0.8)';
-    ctx.font = 'bold 160px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#00ff44';
-    ctx.shadowBlur = 30;
-    ctx.fillText(PUZZLE_DIGITS[1], canvas.width / 2, canvas.height / 2);
-    ctx.shadowBlur = 0;
-
-    // Noise
-    for (let i = 0; i < 500; i++) {
-        ctx.fillStyle = `rgba(0,${150 + Math.random() * 100},0,${Math.random() * 0.3})`;
-        ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
-    }
-
-    // Solve puzzle 2 after viewing
+    // Solve puzzle 2 after viewing for 2 seconds
     if (!state.solvedPuzzles[1]) {
         setTimeout(() => {
-            state.solvedPuzzles[1] = true;
-            showNotification(`كشفت الكاميرا عن الرقم ${PUZZLE_DIGITS[1]}!`);
-            playPuzzleSolvedSound();
-            fillLockDigit(1, PUZZLE_DIGITS[1]);
+            if (phoneCameraActive) {
+                state.solvedPuzzles[1] = true;
+                showNotification(`كشفت الكاميرا عن الرقم ${PUZZLE_DIGITS[1]}!`);
+                playPuzzleSolvedSound();
+                fillLockDigit(1, PUZZLE_DIGITS[1]);
+            }
         }, 2000);
+    }
+}
+
+function renderPhoneCamera() {
+    if (!phoneCameraActive || !phoneCameraRT) return;
+    // Position phone camera at player position, looking same direction
+    phoneCameraObj.position.copy(camera.position);
+    phoneCameraObj.quaternion.copy(camera.quaternion);
+
+    // Render scene to phone camera canvas with UV filter effect
+    renderer.setRenderTarget(phoneCameraRT);
+    renderer.render(scene, phoneCameraObj);
+    renderer.setRenderTarget(null);
+
+    // Draw to canvas with green UV filter
+    const canvas = document.getElementById('phoneCameraCanvas');
+    const ctx = canvas.getContext('2d');
+    const glCanvas = renderer.domElement;
+
+    // Read pixels from render target
+    const w = phoneCameraRT.width, h = phoneCameraRT.height;
+    const pixels = new Uint8Array(w * h * 4);
+    renderer.readRenderTargetPixels(phoneCameraRT, 0, 0, w, h, pixels);
+
+    // Create ImageData with UV filter
+    const imgData = ctx.createImageData(w, h);
+    for (let i = 0; i < pixels.length; i += 4) {
+        // Flip Y (WebGL renders upside down)
+        const row = Math.floor((i / 4) / w);
+        const col = (i / 4) % w;
+        const flippedIdx = ((h - 1 - row) * w + col) * 4;
+        const r = pixels[flippedIdx], g = pixels[flippedIdx + 1], b = pixels[flippedIdx + 2];
+        // UV green filter
+        const brightness = (r * 0.3 + g * 0.6 + b * 0.1);
+        imgData.data[i] = 0;
+        imgData.data[i + 1] = Math.min(255, brightness * 1.2 + 20);
+        imgData.data[i + 2] = 0;
+        imgData.data[i + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // Scan line overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    for (let y = 0; y < h; y += 3) {
+        ctx.fillRect(0, y, w, 1);
     }
 }
 
 function closePhoneCamera() {
     document.getElementById('phoneCameraOverlay').classList.add('hidden');
     state.overlayOpen = false;
+    phoneCameraActive = false;
+    if (uvNumberMesh) uvNumberMesh.visible = false;
 }
 
 // ============= PUZZLE 3: Painting + Red Filter =============
@@ -1602,17 +1813,17 @@ function interactPainting() {
         state.solvedPuzzles[2] = true;
         removeFromInventory('فلتر أحمر');
 
-        // Change painting to show only red (the number)
+        // Red filter: removes red tones, reveals number clearly
         const c = document.createElement('canvas');
-        c.width = 200; c.height = 200;
+        c.width = 256; c.height = 256;
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#ffcccc';
-        ctx.fillRect(0, 0, 200, 200);
-        ctx.fillStyle = '#cc0000';
-        ctx.font = 'bold 100px Arial';
+        ctx.fillStyle = '#cc2222';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 120px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(PUZZLE_DIGITS[2], 100, 100);
+        ctx.fillText(PUZZLE_DIGITS[2], 128, 128);
         paintingMesh.material.map = new THREE.CanvasTexture(c);
         paintingMesh.material.needsUpdate = true;
 
@@ -1631,7 +1842,7 @@ function interactCoffeeMachine() {
         removeFromInventory('كوب');
 
         // Show cup under machine
-        cupMesh.position.set(-3.5, 0.82, -3 + 0.12);
+        cupMesh.position.set(-3.5, 0.80, -3 + 0.12);
         cupMesh.visible = true;
 
         showNotification('يتم تحضير القهوة...');
@@ -1964,7 +2175,7 @@ function animate() {
         }
         direction.normalize();
 
-        if (direction.z !== 0) velocity.z -= direction.z * MOVE_SPEED * delta;
+        if (direction.z !== 0) velocity.z += direction.z * MOVE_SPEED * delta;
         if (direction.x !== 0) velocity.x += direction.x * MOVE_SPEED * delta;
 
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -2015,15 +2226,20 @@ function animate() {
             if (isMobile && mobileBtn) mobileBtn.classList.add('hidden');
         }
 
-        // Drop items near X mark (Puzzle 5)
+        // Auto-place sculpture on X mark when holding it and near X (Puzzle 5)
         if (state.selectedItem === 'مجسم' && !state.sculptureOnX) {
-            const dist = camera.position.distanceTo(new THREE.Vector3(ROOM_W / 2 - 0.8, PLAYER_HEIGHT, -0.5));
-            if (dist < 1.5) {
-                // Auto-place when near X
-                const nearX = new THREE.Vector3(ROOM_W / 2 - 0.8, 0.77, -0.5);
-                const camDist = camera.position.distanceTo(nearX);
-                if (camDist < 2) {
-                    // Show hint
+            const xPos = new THREE.Vector3(ROOM_W / 2 - 0.8, PLAYER_HEIGHT, -0.5);
+            const dist = camera.position.distanceTo(xPos);
+            if (dist < 2.0) {
+                state.sculptureOnX = true;
+                removeFromInventory('مجسم');
+                // Place sculpture on X mark
+                sculptureMesh.position.set(ROOM_W / 2 - 0.8, 0.76, -0.5);
+                sculptureMesh.visible = true;
+                scene.add(sculptureMesh);
+                showNotification('وضعت المجسم على علامة X');
+                if (state.lampOn) {
+                    solvePuzzle5();
                 }
             }
         }
@@ -2036,6 +2252,9 @@ function animate() {
             diamondMesh.material.emissiveIntensity = 1.5 + Math.sin(Date.now() * 0.003) * 0.5;
         }
     }
+
+    // Render phone camera if active
+    renderPhoneCamera();
 
     renderer.render(scene, camera);
 }
