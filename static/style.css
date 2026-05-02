@@ -1,0 +1,281 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Cairo', sans-serif; background: #000; color: #fff; }
+canvas#gameCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+.hidden { display: none !important; }
+
+/* ===== CROSSHAIR ===== */
+.crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 28px; color: rgba(255,255,255,0.6); z-index: 10;
+    pointer-events: none; text-shadow: 0 0 4px rgba(0,0,0,0.8);
+}
+
+/* ===== INTERACT PROMPT ===== */
+.interact-prompt {
+    position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #0ff; padding: 10px 28px;
+    border-radius: 8px; font-size: 16px; z-index: 10;
+    border: 1px solid rgba(0,255,255,0.3); pointer-events: none;
+    animation: promptPulse 1.5s ease-in-out infinite;
+}
+@keyframes promptPulse { 0%,100% { opacity: 0.8; } 50% { opacity: 1; } }
+
+/* ===== TIMER HUD ===== */
+.timer-hud {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.7); color: #0ff; padding: 8px 24px;
+    border-radius: 20px; font-size: 20px; z-index: 10;
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid rgba(0,255,255,0.3);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== INVENTORY BAR ===== */
+.inventory-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); padding: 10px 16px; border-radius: 12px;
+    z-index: 10; display: flex; align-items: center; gap: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+.inv-title { font-size: 12px; color: #aaa; writing-mode: vertical-rl; }
+.inv-slots { display: flex; gap: 6px; }
+.inv-slot {
+    width: 52px; height: 52px; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; cursor: pointer; transition: all 0.2s;
+    position: relative;
+}
+.inv-slot:hover { background: rgba(0,255,255,0.15); border-color: #0ff; }
+.inv-slot.selected { border-color: #0ff; box-shadow: 0 0 10px rgba(0,255,255,0.4); }
+.inv-slot .inv-label {
+    position: absolute; bottom: -18px; font-size: 9px; color: #aaa;
+    white-space: nowrap;
+}
+
+/* ===== LOCK SCREEN HUD ===== */
+.lock-screen-hud {
+    position: fixed; top: 20px; right: 20px;
+    background: rgba(0,0,0,0.8); padding: 10px 16px; border-radius: 10px;
+    z-index: 10; text-align: center;
+    border: 1px solid rgba(255,255,255,0.15);
+}
+.lock-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.lock-digits { display: flex; gap: 4px; justify-content: center; }
+.lock-slot {
+    width: 28px; height: 34px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #0ff;
+    font-variant-numeric: tabular-nums;
+}
+.lock-slot.filled { border-color: #0f0; color: #0f0; }
+.lock-status { font-size: 10px; color: #f44; margin-top: 4px; }
+.lock-status.active { color: #0f0; }
+
+/* ===== MOBILE CONTROLS ===== */
+.mobile-controls {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 40%;
+    z-index: 15; pointer-events: none;
+}
+.joystick-zone {
+    position: absolute; bottom: 30px; left: 30px;
+    width: 130px; height: 130px; pointer-events: auto;
+}
+.joystick-base {
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.25);
+    position: relative;
+}
+.joystick-knob {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: rgba(0,255,255,0.4); border: 2px solid rgba(0,255,255,0.6);
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); transition: none;
+}
+.look-zone {
+    position: absolute; bottom: 0; right: 0; width: 55%; height: 100%;
+    pointer-events: auto;
+}
+.mobile-interact-btn {
+    position: absolute; bottom: 40px; right: 30px;
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(0,255,255,0.3); border: 2px solid #0ff;
+    font-size: 28px; color: #fff; pointer-events: auto;
+    cursor: pointer;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 100; display: flex; align-items: center; justify-content: center;
+}
+.screen.active { display: flex; }
+
+.start-overlay, .win-overlay, .admin-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(ellipse at center, rgba(0,20,40,0.92), rgba(0,0,0,0.98));
+}
+.start-content, .win-content, .admin-content {
+    position: relative; z-index: 1; text-align: center; padding: 30px;
+    max-width: 460px; width: 90%;
+}
+.game-title { font-size: 42px; font-weight: 900; margin-bottom: 8px; color: #0ff; text-shadow: 0 0 30px rgba(0,255,255,0.3); }
+.subtitle { font-size: 16px; color: #aaa; margin-bottom: 30px; }
+
+.start-form { display: flex; flex-direction: column; gap: 16px; }
+.input-group { text-align: right; }
+.input-group label { font-size: 13px; color: #aaa; display: block; margin-bottom: 4px; }
+.input-group input {
+    width: 100%; padding: 12px 16px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
+    color: #fff; font-size: 16px; font-family: 'Cairo', sans-serif;
+    outline: none; text-align: right; direction: rtl;
+}
+.input-group input:focus { border-color: #0ff; }
+
+.btn-enter {
+    padding: 14px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, #0ff, #06c);
+    color: #000; font-size: 18px; font-weight: 700;
+    cursor: pointer; font-family: 'Cairo', sans-serif;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-enter:hover { transform: scale(1.03); box-shadow: 0 0 20px rgba(0,255,255,0.4); }
+
+.controls-info { font-size: 12px; color: #666; margin-top: 20px; }
+
+/* ===== WIN SCREEN ===== */
+.win-title { font-size: 52px; margin-bottom: 10px; }
+.win-sub { font-size: 20px; color: #aaa; margin-bottom: 24px; }
+.win-time, .win-player {
+    font-size: 22px; margin: 8px 0;
+    display: flex; justify-content: center; gap: 12px;
+}
+.win-time span:last-child, .win-player span:last-child { color: #0ff; font-weight: 700; }
+
+/* ===== OVERLAYS ===== */
+.overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85); z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+}
+.overlay-content {
+    background: #1a1a2e; border-radius: 16px; padding: 30px;
+    max-width: 500px; width: 90%; position: relative;
+    border: 1px solid rgba(0,255,255,0.2);
+}
+.close-btn {
+    position: absolute; top: 12px; right: 12px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); border: none;
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.close-btn:hover { background: rgba(255,0,0,0.3); }
+
+/* ===== PHONE CAMERA ===== */
+.phone-camera-view {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+}
+.phone-frame {
+    width: 300px; max-width: 85vw; background: #111;
+    border-radius: 24px; padding: 12px; border: 3px solid #333;
+}
+.phone-screen {
+    position: relative; border-radius: 14px; overflow: hidden;
+    background: #000;
+}
+.phone-screen canvas { width: 100%; display: block; }
+.phone-hud {
+    position: absolute; top: 10px; left: 10px;
+}
+.uv-badge {
+    background: rgba(0,255,0,0.2); color: #0f0; padding: 4px 10px;
+    border-radius: 12px; font-size: 12px; font-weight: 700;
+    border: 1px solid rgba(0,255,0,0.4);
+}
+.close-phone-btn {
+    margin-top: 16px; width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(255,0,0,0.3); border: 2px solid #f44;
+    color: #fff; font-size: 22px; cursor: pointer;
+}
+
+/* ===== RADIO PANEL ===== */
+.radio-panel h2 { text-align: center; margin-bottom: 20px; }
+.radio-body { text-align: center; }
+.radio-display {
+    font-size: 28px; font-weight: 700; color: #0f0;
+    background: #0a0a0a; padding: 16px; border-radius: 8px;
+    margin-bottom: 20px; font-variant-numeric: tabular-nums;
+    border: 1px solid #333; text-shadow: 0 0 10px rgba(0,255,0,0.5);
+}
+.radio-dial { margin: 16px 0; }
+.radio-dial input[type="range"] {
+    width: 100%; -webkit-appearance: none; appearance: none;
+    height: 8px; background: #333; border-radius: 4px; outline: none;
+}
+.radio-dial input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 24px; height: 24px;
+    background: #0ff; border-radius: 50%; cursor: pointer;
+}
+.dial-labels { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-top: 4px; }
+.radio-msg { margin-top: 16px; font-size: 14px; color: #aaa; min-height: 20px; }
+
+/* ===== DOOR LOCK PANEL ===== */
+.door-lock-panel h2 { text-align: center; margin-bottom: 20px; }
+.door-lock-body { text-align: center; }
+.door-lock-digits { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+.dl-slot {
+    width: 44px; height: 56px; background: rgba(0,255,255,0.05);
+    border: 2px solid rgba(0,255,255,0.3); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 700; color: #0ff;
+}
+.dl-slot.filled { border-color: #0f0; color: #0f0; background: rgba(0,255,0,0.08); }
+.door-confirm-btn {
+    padding: 12px 40px; border-radius: 8px; border: none;
+    background: linear-gradient(135deg, #0ff, #06c);
+    color: #000; font-size: 16px; font-weight: 700;
+    cursor: pointer; font-family: 'Cairo', sans-serif;
+}
+.door-confirm-btn:hover { box-shadow: 0 0 20px rgba(0,255,255,0.4); }
+.door-lock-msg { margin-top: 12px; font-size: 14px; min-height: 20px; }
+.door-lock-off { text-align: center; padding: 30px 0; }
+.door-lock-off p { font-size: 18px; color: #f44; }
+.hint-sub { font-size: 13px; color: #888; margin-top: 8px; }
+
+/* ===== NOTIFICATION ===== */
+.notification {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,255,0,0.15); color: #0f0; padding: 10px 28px;
+    border-radius: 8px; font-size: 15px; z-index: 300;
+    border: 1px solid rgba(0,255,0,0.3);
+    animation: notifSlide 0.3s ease-out;
+}
+@keyframes notifSlide { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* ===== ADMIN PANEL ===== */
+.admin-content { max-width: 800px; }
+.admin-content h1 { margin-bottom: 20px; font-size: 28px; }
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
+.admin-tab {
+    padding: 8px 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    background: transparent; color: #aaa; cursor: pointer; font-family: 'Cairo', sans-serif;
+    font-size: 14px;
+}
+.admin-tab.active { background: rgba(0,255,255,0.15); color: #0ff; border-color: #0ff; }
+.admin-section { max-height: 60vh; overflow-y: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th { background: rgba(255,255,255,0.05); padding: 10px; text-align: right; color: #0ff; }
+.admin-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: right; }
+.admin-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 600px) {
+    .game-title { font-size: 28px; }
+    .overlay-content { padding: 20px; }
+    .phone-frame { width: 260px; }
+    .inv-slot { width: 44px; height: 44px; font-size: 20px; }
+}

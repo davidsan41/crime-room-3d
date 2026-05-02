@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>غرفة الهروب</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- CROSSHAIR -->
+    <div id="crosshair" class="crosshair hidden">+</div>
+
+    <!-- INTERACTION PROMPT -->
+    <div id="interactPrompt" class="interact-prompt hidden">
+        <span id="promptText">انقر للتفاعل</span>
+    </div>
+
+    <!-- TIMER HUD -->
+    <div id="timerDisplay" class="timer-hud hidden">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span id="timerText">00:00</span>
+    </div>
+
+    <!-- INVENTORY HUD -->
+    <div id="inventoryBar" class="inventory-bar hidden">
+        <div class="inv-title">المخزن</div>
+        <div id="inventorySlots" class="inv-slots"></div>
+    </div>
+
+    <!-- LOCK SCREEN PANEL (6 digit slots) -->
+    <div id="lockScreenHUD" class="lock-screen-hud hidden">
+        <div class="lock-label">شاشة القفل</div>
+        <div id="lockDigits" class="lock-digits">
+            <span class="lock-slot" id="lockSlot0">_</span>
+            <span class="lock-slot" id="lockSlot1">_</span>
+            <span class="lock-slot" id="lockSlot2">_</span>
+            <span class="lock-slot" id="lockSlot3">_</span>
+            <span class="lock-slot" id="lockSlot4">_</span>
+            <span class="lock-slot" id="lockSlot5">_</span>
+        </div>
+        <div id="lockStatus" class="lock-status">غير مفعّلة</div>
+    </div>
+
+    <!-- MOBILE CONTROLS -->
+    <div id="mobileControls" class="mobile-controls hidden">
+        <div id="joystickZone" class="joystick-zone">
+            <div id="joystickBase" class="joystick-base">
+                <div id="joystickKnob" class="joystick-knob"></div>
+            </div>
+        </div>
+        <div id="lookZone" class="look-zone"></div>
+        <button id="mobileInteractBtn" class="mobile-interact-btn hidden">👆</button>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="startScreen" class="screen active">
+        <div class="start-overlay"></div>
+        <div class="start-content">
+            <h1 class="game-title">🔒 غرفة الهروب</h1>
+            <p class="subtitle">حل الألغاز وافتح الباب قبل فوات الأوان</p>
+            <div class="start-form">
+                <div class="input-group">
+                    <label for="playerName">اسم اللاعب</label>
+                    <input type="text" id="playerName" placeholder="أدخل اسمك..." autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label for="roomNumber">رقم الغرفة</label>
+                    <input type="text" id="roomNumber" placeholder="أدخل رقم الغرفة..." autocomplete="off">
+                </div>
+                <button id="enterBtn" class="btn-enter" onclick="startGame()">
+                    <span>دخول</span>
+                </button>
+            </div>
+            <p class="controls-info" id="controlsInfo"></p>
+        </div>
+    </div>
+
+    <!-- PHONE CAMERA OVERLAY (Puzzle 2) -->
+    <div id="phoneCameraOverlay" class="overlay hidden">
+        <div class="phone-camera-view">
+            <div class="phone-frame">
+                <div class="phone-screen">
+                    <canvas id="phoneCameraCanvas" width="400" height="600"></canvas>
+                    <div class="phone-hud">
+                        <span class="uv-badge">UV FILTER</span>
+                    </div>
+                </div>
+            </div>
+            <button class="close-phone-btn" onclick="closePhoneCamera()">✕</button>
+        </div>
+    </div>
+
+    <!-- RADIO OVERLAY (Puzzle 6) -->
+    <div id="radioOverlay" class="overlay hidden">
+        <div class="overlay-content radio-panel">
+            <button class="close-btn" onclick="closeOverlay('radioOverlay')">✕</button>
+            <h2>📻 الراديو</h2>
+            <div class="radio-body">
+                <div class="radio-display" id="radioDisplay">FM 88.0</div>
+                <div class="radio-dial">
+                    <input type="range" id="radioSlider" min="880" max="1080" value="880" step="1"
+                           oninput="onRadioTune(this.value)">
+                    <div class="dial-labels">
+                        <span>88</span><span>92</span><span>96</span><span>100</span><span>104</span><span>108</span>
+                    </div>
+                </div>
+                <div id="radioMessage" class="radio-msg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOCK SCREEN INTERACT OVERLAY (door panel) -->
+    <div id="doorLockOverlay" class="overlay hidden">
+        <div class="overlay-content door-lock-panel">
+            <button class="close-btn" onclick="closeOverlay('doorLockOverlay')">✕</button>
+            <h2>🔐 شاشة القفل الإلكترونية</h2>
+            <div id="doorLockBody" class="door-lock-body">
+                <div id="doorLockDigits" class="door-lock-digits">
+                    <span class="dl-slot" id="dlSlot0">_</span>
+                    <span class="dl-slot" id="dlSlot1">_</span>
+                    <span class="dl-slot" id="dlSlot2">_</span>
+                    <span class="dl-slot" id="dlSlot3">_</span>
+                    <span class="dl-slot" id="dlSlot4">_</span>
+                    <span class="dl-slot" id="dlSlot5">_</span>
+                </div>
+                <button id="doorConfirmBtn" class="door-confirm-btn" onclick="confirmDoorCode()">تأكيد</button>
+                <div id="doorLockMsg" class="door-lock-msg"></div>
+            </div>
+            <div id="doorLockOff" class="door-lock-off">
+                <p>⚡ الشاشة مطفأة</p>
+                <p class="hint-sub">يجب تفعيل الطاقة أولاً</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- WIN SCREEN -->
+    <div id="winScreen" class="screen hidden">
+        <div class="win-overlay"></div>
+        <div class="win-content">
+            <h1 class="win-title">🎉 مبروك!</h1>
+            <p class="win-sub">لقد هربت من الغرفة!</p>
+            <div class="win-time">
+                <span>الوقت:</span>
+                <span id="winTime">00:00</span>
+            </div>
+            <div class="win-player">
+                <span>اللاعب:</span>
+                <span id="winPlayer"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="adminPanel" class="screen hidden">
+        <div class="admin-overlay"></div>
+        <div class="admin-content">
+            <h1>🛡️ لوحة الإدارة</h1>
+            <div class="admin-tabs">
+                <button class="admin-tab active" onclick="showAdminTab('results')">النتائج</button>
+                <button class="admin-tab" onclick="showAdminTab('players')">اللاعبين</button>
+            </div>
+            <div id="adminResults" class="admin-section">
+                <table id="resultsTable" class="admin-table">
+                    <thead><tr><th>الاسم</th><th>الغرفة</th><th>الوقت</th><th>التاريخ</th></tr></thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <div id="adminPlayers" class="admin-section hidden">
+                <table id="playersTable" class="admin-table">
+                    <thead><tr><th>الاسم</th><th>الغرفة</th><th>الجهاز</th><th>النظام</th><th>وقت الدخول</th></tr></thead>
+                    <tbody id="playersBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION -->
+    <div id="notification" class="notification hidden">
+        <span id="notifText"></span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="/static/game.js"></script>
+</body>
+</html>
