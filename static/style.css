@@ -29,11 +29,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Cairo',sans-serif;
 
 /* ===== MOBILE CONTROLS ===== */
 .mobile-controls{position:fixed;bottom:0;left:0;right:0;top:0;z-index:40;pointer-events:none}
-.joystick-zone{position:absolute;bottom:30px;left:30px;width:140px;height:140px;pointer-events:auto}
-.joystick-base{width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);position:relative;display:flex;align-items:center;justify-content:center}
-.joystick-knob{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.3);position:absolute;transition:none}
-.look-zone{position:absolute;top:0;right:0;bottom:0;left:50%;pointer-events:auto}
-.mobile-interact-btn{position:absolute;bottom:50px;right:30px;pointer-events:auto;width:70px;height:70px;border-radius:50%;background:rgba(255,102,0,.3);border:2px solid #ff6600;color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2}
+.joystick-zone{position:absolute;bottom:20px;left:20px;width:160px;height:160px;pointer-events:auto;touch-action:none}
+.joystick-base{width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.2);position:relative;display:flex;align-items:center;justify-content:center}
+.joystick-knob{width:55px;height:55px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.35);position:absolute;transition:none;touch-action:none}
+.look-zone{position:absolute;top:0;right:0;bottom:0;left:45%;pointer-events:auto;touch-action:none}
+.mobile-interact-btn{position:absolute;bottom:40px;right:25px;pointer-events:auto;width:80px;height:80px;border-radius:50%;background:rgba(255,102,0,.35);border:3px solid #ff6600;color:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;touch-action:none}
 
 /* ===== SCREENS ===== */
 .screen{position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;display:flex;align-items:center;justify-content:center}
@@ -60,6 +60,13 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Cairo',sans-serif;
 .win-subtitle{font-size:24px;color:#ff8833;margin-bottom:24px;font-weight:700;letter-spacing:4px}
 .win-time{display:flex;align-items:center;justify-content:center;gap:12px;font-size:28px;color:#fff;margin-bottom:24px}
 .win-time span:first-child{color:#888;font-size:16px}
+
+/* Lose Screen */
+.lose-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(30,5,5,.95),rgba(15,5,5,.95))}
+.lose-content{position:relative;z-index:1;text-align:center;padding:40px;max-width:480px}
+.lose-title{font-size:clamp(32px,8vw,56px);color:#ff2222;text-shadow:0 0 40px rgba(255,0,0,.4);margin-bottom:8px}
+.lose-subtitle{font-size:24px;color:#ff4444;margin-bottom:16px;font-weight:700;letter-spacing:4px}
+.lose-msg{color:#999;font-size:16px;margin-bottom:24px}
 
 /* Loading Screen */
 .loading-content h2{color:#ff8833;margin-bottom:20px}

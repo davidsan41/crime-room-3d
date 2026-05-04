@@ -94,6 +94,7 @@ function cacheDom() {
     'numpadOverlay', 'numpadDisplay', 'numpadCloseBtn', 'numpadMessage',
     'alphaOverlay', 'alphaDisplay', 'alphaCloseBtn', 'alphaMessage',
     'winScreen', 'finalTime', 'restartBtn',
+    'loseScreen', 'loseRestartBtn',
     'loadingScreen', 'loadingFill', 'loadingText',
   ];
   ids.forEach(id => DOM[id] = document.getElementById(id));
@@ -359,7 +360,7 @@ const PhoneShaderMaterial = {
 function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x050508);
-  scene.fog = new THREE.FogExp2(0x050508, 0.04);
+  scene.fog = new THREE.FogExp2(0x0a0a12, 0.015);
 
   clock = new THREE.Clock();
 
@@ -374,7 +375,7 @@ function initScene() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.8;
+  renderer.toneMappingExposure = 1.4;
 
   // Camera
   camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
@@ -395,7 +396,7 @@ function initScene() {
   phoneRenderTarget = new THREE.WebGLRenderTarget(320, 480);
 
   // Minimal ambient light
-  const ambient = new THREE.AmbientLight(0x111122, 0.15);
+  const ambient = new THREE.AmbientLight(0x334455, 0.8);
   scene.add(ambient);
 
   window.addEventListener('resize', onResize);
@@ -776,53 +777,72 @@ function createPosterTexture() {
 // LIGHTING
 // ================================================================
 function buildLighting() {
-  // Zone 1 lights
-  const z1Light = new THREE.PointLight(0xffaa66, 1.5, 12, 1.5);
-  z1Light.position.set(0, 3, -4);
+  // Zone 1 lights - bright warm
+  const z1Light = new THREE.PointLight(0xffcc88, 4, 20, 1);
+  z1Light.position.set(0, 3, -2);
   z1Light.castShadow = true;
   z1Light.shadow.mapSize.set(512, 512);
   scene.add(z1Light);
 
-  const z1Spot = new THREE.SpotLight(0x4466aa, 2, 15, Math.PI / 6, 0.5, 1);
-  z1Spot.position.set(0, 3.4, -6);
-  z1Spot.target.position.set(0, 0, -6);
+  const z1Light2 = new THREE.PointLight(0xffcc88, 3, 18, 1);
+  z1Light2.position.set(0, 3, -8);
+  scene.add(z1Light2);
+
+  const z1Spot = new THREE.SpotLight(0xddeeff, 5, 20, Math.PI / 4, 0.3, 0.5);
+  z1Spot.position.set(0, 3.4, -5);
+  z1Spot.target.position.set(0, 0, -5);
   z1Spot.castShadow = true;
   scene.add(z1Spot);
   scene.add(z1Spot.target);
 
-  // Zone 2 lights
-  const z2Light = new THREE.PointLight(0xffaa66, 1.2, 12, 1.5);
-  z2Light.position.set(0, 3, -19);
+  // Zone 2 lights - bright
+  const z2Light = new THREE.PointLight(0xffcc88, 4, 20, 1);
+  z2Light.position.set(0, 3, -16);
   z2Light.castShadow = true;
   scene.add(z2Light);
 
-  const z2Spot = new THREE.SpotLight(0x4466aa, 2.5, 15, Math.PI / 5, 0.4, 1);
-  z2Spot.position.set(0, 3.4, -20);
-  z2Spot.target.position.set(0, 0, -20);
+  const z2Light2 = new THREE.PointLight(0xffcc88, 3, 18, 1);
+  z2Light2.position.set(0, 3, -22);
+  scene.add(z2Light2);
+
+  const z2Spot = new THREE.SpotLight(0xddeeff, 5, 20, Math.PI / 4, 0.3, 0.5);
+  z2Spot.position.set(0, 3.4, -19);
+  z2Spot.target.position.set(0, 0, -19);
   z2Spot.castShadow = true;
   scene.add(z2Spot);
   scene.add(z2Spot.target);
 
-  // Zone 3 lights
-  const z3Light = new THREE.PointLight(0xffaa66, 1.0, 12, 1.5);
-  z3Light.position.set(0, 3, -35);
+  // Zone 3 lights - bright
+  const z3Light = new THREE.PointLight(0xffcc88, 4, 20, 1);
+  z3Light.position.set(0, 3, -32);
   z3Light.castShadow = true;
   scene.add(z3Light);
 
-  const z3Spot = new THREE.SpotLight(0x88aaff, 3, 15, Math.PI / 5, 0.3, 1);
-  z3Spot.position.set(0, 3.4, -38);
-  z3Spot.target.position.set(0, 0, -40);
+  const z3Light2 = new THREE.PointLight(0xffcc88, 3, 18, 1);
+  z3Light2.position.set(0, 3, -38);
+  scene.add(z3Light2);
+
+  const z3Spot = new THREE.SpotLight(0x88ccff, 5, 20, Math.PI / 4, 0.3, 0.5);
+  z3Spot.position.set(0, 3.4, -35);
+  z3Spot.target.position.set(0, 0, -37);
   z3Spot.castShadow = true;
   scene.add(z3Spot);
   scene.add(z3Spot.target);
 
   // Exit door spotlight
-  const exitSpot = new THREE.SpotLight(0xff4400, 2, 8, Math.PI / 8, 0.6, 1);
+  const exitSpot = new THREE.SpotLight(0xff6600, 4, 12, Math.PI / 5, 0.4, 0.5);
   exitSpot.position.set(0, 3.4, -41);
   exitSpot.target.position.set(0, 1, -42.5);
   exitSpot.castShadow = true;
   scene.add(exitSpot);
   scene.add(exitSpot.target);
+
+  // Additional corridor fill lights
+  for (let z = 0; z >= -42; z -= 7) {
+    const fill = new THREE.PointLight(0xaabbcc, 1.5, 10, 1);
+    fill.position.set(0, 3.2, z);
+    scene.add(fill);
+  }
 }
 
 // ================================================================
@@ -1250,6 +1270,8 @@ function animateDoorOpen(doorGroup) {
 // ================================================================
 // TIMER
 // ================================================================
+const TOTAL_TIME_MS = 10 * 60 * 1000; // 10 minutes
+
 function startTimer() {
   STATE.timerStart = Date.now();
   STATE.elapsed = 0;
@@ -1258,12 +1280,29 @@ function startTimer() {
 }
 
 function updateTimer() {
-  if (!STATE.timerStart) return;
+  if (!STATE.timerStart || STATE.gameWon) return;
   STATE.elapsed = Date.now() - STATE.timerStart;
-  const totalSec = Math.floor(STATE.elapsed / 1000);
+  const remaining = Math.max(0, TOTAL_TIME_MS - STATE.elapsed);
+  const totalSec = Math.ceil(remaining / 1000);
   const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
   const sec = (totalSec % 60).toString().padStart(2, '0');
   if (DOM.timerText) DOM.timerText.textContent = `${min}:${sec}`;
+
+  // Change color when low time
+  if (DOM.timerDisplay) {
+    if (totalSec <= 60) {
+      DOM.timerDisplay.style.color = '#ff2222';
+      DOM.timerDisplay.style.borderColor = 'rgba(255,0,0,0.4)';
+    } else if (totalSec <= 180) {
+      DOM.timerDisplay.style.color = '#ffaa00';
+      DOM.timerDisplay.style.borderColor = 'rgba(255,170,0,0.3)';
+    }
+  }
+
+  // Time's up!
+  if (remaining <= 0) {
+    showLoseScreen();
+  }
 }
 
 function stopTimer() {
@@ -1275,6 +1314,21 @@ function getFormattedTime() {
   const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
   const sec = (totalSec % 60).toString().padStart(2, '0');
   return `${min}:${sec}`;
+}
+
+function getRemainingTime() {
+  const remaining = Math.max(0, TOTAL_TIME_MS - STATE.elapsed);
+  const totalSec = Math.ceil(remaining / 1000);
+  const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
+  const sec = (totalSec % 60).toString().padStart(2, '0');
+  return `${min}:${sec}`;
+}
+
+function showLoseScreen() {
+  STATE.gameWon = true; // reuse flag to stop game loop
+  stopTimer();
+  DOM.loseScreen?.classList.remove('hidden');
+  if (!STATE.isMobile && controls) controls.unlock();
 }
 
 // ================================================================
@@ -1331,10 +1385,10 @@ function setupControls() {
 
   if (STATE.isMobile) {
     setupMobileControls();
-    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'تحكم الجوال: عصا التحكم للحركة + سحب الشاشة للنظر';
+    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'تحكم الجوال: عصا التحكم للحركة + سحب الشاشة للنظر | 10 دقائق للهروب!';
   } else {
     setupDesktopControls();
-    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'التحكم: Z/S/Q/D للحركة | الفأرة للنظر | E أو انقر للتفاعل | F للهاتف';
+    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'التحكم: Z/S/Q/D للحركة | الفأرة للنظر | E أو انقر للتفاعل | F للهاتف | 10 دقائق للهروب!';
   }
 }
 
@@ -1346,23 +1400,37 @@ function setupDesktopControls() {
 
 function onKeyDown(e) {
   if (STATE.overlayOpen) return;
-  switch (e.code) {
-    case 'KeyZ': case 'KeyW': moveForward = true; break;
-    case 'KeyS': moveBackward = true; break;
-    case 'KeyQ': case 'KeyA': moveLeft = true; break;
-    case 'KeyD': moveRight = true; break;
-    case 'KeyE': interact(); break;
-    case 'KeyF': if (STATE.hasPhone) togglePhone(); break;
-  }
+  // French AZERTY: physical key positions
+  // e.code = physical key, e.key = character produced
+  // On French AZERTY laptops: Z=forward, S=back, Q=left, D=right
+  // e.code 'KeyW' is physical W position (which is Z on AZERTY)
+  // e.code 'KeyA' is physical A position (which is Q on AZERTY)
+  // We support both e.code and e.key for maximum compatibility
+  const key = e.key.toLowerCase();
+  const code = e.code;
+
+  // Forward: Z key (AZERTY) or W key (QWERTY)
+  if (key === 'z' || key === 'w' || code === 'KeyW' || code === 'KeyZ') { moveForward = true; return; }
+  // Backward: S key
+  if (key === 's' || code === 'KeyS') { moveBackward = true; return; }
+  // Left: Q key (AZERTY) or A key (QWERTY)
+  if (key === 'q' || key === 'a' || code === 'KeyQ' || code === 'KeyA') { moveLeft = true; return; }
+  // Right: D key
+  if (key === 'd' || code === 'KeyD') { moveRight = true; return; }
+  // Interact: E key
+  if (key === 'e' || code === 'KeyE') { interact(); return; }
+  // Phone: F key
+  if ((key === 'f' || code === 'KeyF') && STATE.hasPhone) { togglePhone(); return; }
 }
 
 function onKeyUp(e) {
-  switch (e.code) {
-    case 'KeyZ': case 'KeyW': moveForward = false; break;
-    case 'KeyS': moveBackward = false; break;
-    case 'KeyQ': case 'KeyA': moveLeft = false; break;
-    case 'KeyD': moveRight = false; break;
-  }
+  const key = e.key.toLowerCase();
+  const code = e.code;
+
+  if (key === 'z' || key === 'w' || code === 'KeyW' || code === 'KeyZ') { moveForward = false; return; }
+  if (key === 's' || code === 'KeyS') { moveBackward = false; return; }
+  if (key === 'q' || key === 'a' || code === 'KeyQ' || code === 'KeyA') { moveLeft = false; return; }
+  if (key === 'd' || code === 'KeyD') { moveRight = false; return; }
 }
 
 function onDesktopClick() {
@@ -1377,7 +1445,7 @@ function onDesktopClick() {
 function setupMobileControls() {
   DOM.mobileControls?.classList.remove('hidden');
 
-  // Joystick
+  // Joystick - larger touch area, smoother response
   const joystickZone = DOM.joystickZone;
   const knob = DOM.joystickKnob;
   const base = DOM.joystickBase;
@@ -1401,12 +1469,16 @@ function setupMobileControls() {
         if (touch.identifier !== jTouchId) continue;
         let dx = touch.clientX - jCenter.x;
         let dy = touch.clientY - jCenter.y;
-        const maxR = 35;
+        const maxR = 45;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
         knob.style.transform = `translate(${dx}px, ${dy}px)`;
-        joystickData.dx = dx / maxR;
-        joystickData.dy = dy / maxR;
+        // Smooth deadzone: ignore very small movements
+        const norm = dist / maxR;
+        const deadzone = 0.1;
+        const adjusted = norm < deadzone ? 0 : (norm - deadzone) / (1 - deadzone);
+        joystickData.dx = dist > 0 ? (dx / dist) * adjusted : 0;
+        joystickData.dy = dist > 0 ? (dy / dist) * adjusted : 0;
       }
     }, { passive: false });
 
@@ -1424,10 +1496,11 @@ function setupMobileControls() {
     joystickZone.addEventListener('touchcancel', endJoystick, { passive: false });
   }
 
-  // Look zone (right side)
+  // Look zone - full right side, smooth camera with sensitivity
   const lookZone = DOM.lookZone;
   if (lookZone) {
     let lookTouchId = null;
+    const lookSensitivity = 0.004;
 
     lookZone.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -1448,9 +1521,9 @@ function setupMobileControls() {
         lookData.lastY = touch.clientY;
 
         euler.setFromQuaternion(camera.quaternion);
-        euler.y -= dx * 0.003;
-        euler.x -= dy * 0.003;
-        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+        euler.y -= dx * lookSensitivity;
+        euler.x -= dy * lookSensitivity;
+        euler.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, euler.x));
         camera.quaternion.setFromEuler(euler);
       }
     }, { passive: false });
@@ -1586,6 +1659,7 @@ function setupUIEvents() {
 
   // Restart button
   DOM.restartBtn?.addEventListener('click', () => location.reload());
+  DOM.loseRestartBtn?.addEventListener('click', () => location.reload());
 }
 
 // ================================================================
