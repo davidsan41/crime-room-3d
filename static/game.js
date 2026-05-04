@@ -1,1225 +1,1657 @@
-// ============= GAME STATE =============
-const state = {
-    playerName: '', roomNumber: '',
-    timerStart: null, timerInterval: null, elapsed: 0,
-    photoMoved: false, pillowMoved: false, safeOpened: false,
-    hintSeen: false, laptopUnlocked: false, emailOpened: false,
-    gameEnded: false, safeCode: '', passwordText: '', shiftActive: false,
-    isAdmin: false, overlayOpen: false
+// ================================================================
+// ESCAPE ROOM 3D - Complete Game Engine
+// ================================================================
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+// ================================================================
+// GAME STATE
+// ================================================================
+const STATE = {
+  playerName: '',
+  roomName: '',
+  timerStart: null,
+  timerInterval: null,
+  elapsed: 0,
+  gameStarted: false,
+  gameWon: false,
+  overlayOpen: false,
+  isMobile: false,
+  isPointerLocked: false,
+
+  // Inventory
+  inventory: [],
+
+  // Zone 1
+  hasPhone: false,
+  phoneActive: false,
+  zone1Solved: false,
+  numpadInput: '',
+
+  // Zone 2
+  zone2Solved: false,
+  alphaInput: '',
+
+  // Zone 3
+  valveActivated: false,
+  waterLevel: 0,
+  waterRising: false,
+  keyFloated: false,
+  hasKey: false,
+  zone3Solved: false,
 };
 
-const SAFE_CODE = '243';
-const LAPTOP_PASSWORD = 'rasputin';
-const ADMIN_NAME = 'admin-louai';
+const ZONE1_CODE = '8492';
+const ZONE2_CODE = 'N7X2';
 
-// Encoded reference tokens
-const _0x1a = [115,101,99,114,101,116,45,97,100,109,105,110,45,108,111,117,97,105];
-const _0x2b = String.fromCharCode(..._0x1a);
-const _0x3c = [
-    '/api/geoip',
-    atob('aHR0cHM6Ly9pcHdoby5pcy9qc29u'),
-    atob('aHR0cHM6Ly9pcGluZm8uaW8vanNvbg==')
-];
-
-// ============= THREE.JS GLOBALS =============
-let scene, camera, renderer, clock;
+// ================================================================
+// THREE.JS GLOBALS
+// ================================================================
+let scene, camera, renderer, clock, controls;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-let velocity, direction;
-let raycaster, mouse;
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+// Raycaster
+const raycaster = new THREE.Raycaster();
+const screenCenter = new THREE.Vector2(0, 0);
 let interactiveObjects = [];
-let isPointerLocked = false;
-let isMobile = false;
-let joystickData = { active: false, dx: 0, dy: 0 };
-let lookData = { active: false, lastX: 0, lastY: 0 };
-let euler;
+let currentTarget = null;
 
-// 3D Objects references
-let photoFrame, wallSafe, puzzleNote, pillow, musicSheet, laptop, bodyGroup;
-let photoMesh, safeMesh, puzzleNoteMesh, pillowMesh, musicSheetMesh, laptopMesh;
+// Phone camera system (Zone 1)
+let phoneCamera, phoneRenderTarget;
 
-// ============= INITIALIZATION =============
-function init3D() {
-    isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
+// Water system (Zone 3)
+let waterMesh, goldenKeyMesh, valveMesh;
 
-    velocity = new THREE.Vector3();
-    direction = new THREE.Vector3();
-    euler = new THREE.Euler(0, 0, 0, 'YXZ');
+// Prison bars references
+let bars1Group, bars2Group;
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0f);
-    scene.fog = new THREE.Fog(0x0a0a0f, 8, 14);
+// Final door
+let finalDoorMesh;
 
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 1.6, 3);
+// Joystick data
+const joystickData = { active: false, dx: 0, dy: 0 };
+const lookData = { active: false, lastX: 0, lastY: 0 };
 
-    renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.8;
+// Texture loader
+const textureLoader = new THREE.TextureLoader();
+const gltfLoader = new GLTFLoader();
 
-    clock = new THREE.Clock();
-    raycaster = new THREE.Raycaster();
-    raycaster.far = 5;
-    mouse = new THREE.Vector2();
-
-    buildRoom();
-    buildFurniture();
-    setupLights();
-    setupControls();
-
-    window.addEventListener('resize', onResize);
-    animate();
+// ================================================================
+// DOM REFERENCES
+// ================================================================
+const DOM = {};
+function cacheDom() {
+  const ids = [
+    'gameCanvas', 'crosshair', 'crosshairActive', 'interactPrompt', 'promptText',
+    'timerDisplay', 'timerText', 'inventoryBar', 'inventorySlots',
+    'mobileControls', 'joystickBase', 'joystickKnob', 'joystickZone', 'lookZone',
+    'mobileInteractBtn', 'startScreen', 'enterBtn', 'playerName', 'roomName', 'controlsInfo',
+    'phoneOverlay', 'phoneCanvas', 'phoneCloseBtn',
+    'numpadOverlay', 'numpadDisplay', 'numpadCloseBtn', 'numpadMessage',
+    'alphaOverlay', 'alphaDisplay', 'alphaCloseBtn', 'alphaMessage',
+    'winScreen', 'finalTime', 'restartBtn',
+    'loadingScreen', 'loadingFill', 'loadingText',
+  ];
+  ids.forEach(id => DOM[id] = document.getElementById(id));
 }
 
-// ============= ROOM GEOMETRY =============
-function buildRoom() {
-    const W = 8, H = 3.2, D = 6;
+// ================================================================
+// ASSET LOADING
+// ================================================================
+const MODELS = {};
+const TEXTURES = {};
+let loadedCount = 0;
+const totalAssets = 16; // 13 models + 3 textures
 
-    const wallTex = createWallTexture();
-    const floorTex = createFloorTexture();
-    const ceilTex = createCeilingTexture();
+function updateLoadProgress() {
+  loadedCount++;
+  const pct = Math.round((loadedCount / totalAssets) * 100);
+  if (DOM.loadingFill) DOM.loadingFill.style.width = pct + '%';
+}
 
-    // Floor
-    const floorGeo = new THREE.PlaneGeometry(W, D);
-    const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Ceiling
-    const ceilGeo = new THREE.PlaneGeometry(W, D);
-    const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.9 });
-    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
-    ceil.rotation.x = Math.PI / 2;
-    ceil.position.y = H;
-    scene.add(ceil);
-
-    // Walls
-    const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.7 });
-
-    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat);
-    backWall.position.set(0, H / 2, -D / 2);
-    scene.add(backWall);
-
-    const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat.clone());
-    frontWall.position.set(0, H / 2, D / 2);
-    frontWall.rotation.y = Math.PI;
-    scene.add(frontWall);
-
-    const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wallMat.clone());
-    leftWall.position.set(-W / 2, H / 2, 0);
-    leftWall.rotation.y = Math.PI / 2;
-    scene.add(leftWall);
-
-    const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wallMat.clone());
-    rightWall.position.set(W / 2, H / 2, 0);
-    rightWall.rotation.y = -Math.PI / 2;
-    scene.add(rightWall);
-
-    // Baseboard
-    const bbMat = new THREE.MeshStandardMaterial({ color: 0x2a1c13, roughness: 0.6 });
-    const bbH = 0.1;
-    [
-        { pos: [0, bbH / 2, -D / 2 + 0.01], rot: 0, w: W },
-        { pos: [0, bbH / 2, D / 2 - 0.01], rot: Math.PI, w: W },
-        { pos: [-W / 2 + 0.01, bbH / 2, 0], rot: Math.PI / 2, w: D },
-        { pos: [W / 2 - 0.01, bbH / 2, 0], rot: -Math.PI / 2, w: D },
-    ].forEach(b => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(b.w, bbH), bbMat);
-        m.position.set(...b.pos);
-        m.rotation.y = b.rot;
-        scene.add(m);
+function loadTexture(name, url) {
+  return new Promise(resolve => {
+    textureLoader.load(url, tex => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      TEXTURES[name] = tex;
+      updateLoadProgress();
+      resolve(tex);
+    }, undefined, () => {
+      updateLoadProgress();
+      resolve(null);
     });
+  });
 }
 
-// ============= PROCEDURAL TEXTURES =============
-function createWallTexture() {
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 256;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#3a2a1e';
-    ctx.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 500; i++) {
-        ctx.fillStyle = `rgba(${Math.random() > 0.5 ? 60 : 40},${20 + Math.random() * 20},${10 + Math.random() * 15},${0.1 + Math.random() * 0.15})`;
-        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 6, 2 + Math.random() * 6);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(3, 2);
-    return tex;
-}
-
-function createFloorTexture() {
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 256;
-    const ctx = c.getContext('2d');
-    const plankW = 64;
-    for (let i = 0; i < 4; i++) {
-        const base = 50 + Math.random() * 20;
-        ctx.fillStyle = `rgb(${base + 20},${base},${base - 15})`;
-        ctx.fillRect(i * plankW, 0, plankW - 1, 256);
-        for (let j = 0; j < 30; j++) {
-            ctx.strokeStyle = `rgba(30,15,5,${0.05 + Math.random() * 0.1})`;
-            ctx.beginPath();
-            ctx.moveTo(i * plankW + Math.random() * plankW, 0);
-            ctx.lineTo(i * plankW + Math.random() * plankW, 256);
-            ctx.stroke();
-        }
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(4, 3);
-    return tex;
-}
-
-function createCeilingTexture() {
-    const c = document.createElement('canvas');
-    c.width = 128; c.height = 128;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#1a1520';
-    ctx.fillRect(0, 0, 128, 128);
-    for (let i = 0; i < 200; i++) {
-        ctx.fillStyle = `rgba(20,15,25,${0.3 + Math.random() * 0.3})`;
-        ctx.fillRect(Math.random() * 128, Math.random() * 128, 3 + Math.random() * 5, 3 + Math.random() * 5);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(2, 2);
-    return tex;
-}
-
-// ============= FURNITURE =============
-function buildFurniture() {
-    buildPhotoAndSafe();
-    buildBed();
-    buildDesk();
-    buildBody();
-}
-
-function buildPhotoAndSafe() {
-    const frameGroup = new THREE.Group();
-    frameGroup.name = 'photo';
-
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.5 });
-    const frameBox = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.05), frameMat);
-    frameGroup.add(frameBox);
-
-    const loader = new THREE.TextureLoader();
-    const photoTex = loader.load('/static/assets/photo.png');
-    const photoInner = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.55, 0.72),
-        new THREE.MeshStandardMaterial({ map: photoTex })
-    );
-    photoInner.position.z = 0.026;
-    frameGroup.add(photoInner);
-
-    frameGroup.position.set(0, 1.8, -2.97);
-    scene.add(frameGroup);
-    photoMesh = frameGroup;
-    interactiveObjects.push({ mesh: frameGroup, name: 'photo', prompt: 'إزاحة الصورة' });
-
-    // Wall safe (hidden initially)
-    const safeGroup = new THREE.Group();
-    safeGroup.name = 'safe';
-    const safebody = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.5, 0.15),
-        new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.3, metalness: 0.7 })
-    );
-    safeGroup.add(safebody);
-
-    const dial = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16),
-        new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.2 })
-    );
-    dial.rotation.x = Math.PI / 2;
-    dial.position.z = 0.08;
-    safeGroup.add(dial);
-
-    safeGroup.position.set(0, 1.8, -2.92);
-    safeGroup.visible = false;
-    scene.add(safeGroup);
-    safeMesh = safeGroup;
-
-    // Puzzle note (hidden initially)
-    const noteTex = loader.load('/static/assets/puzzle.png');
-    const noteMat = new THREE.MeshStandardMaterial({ map: noteTex, roughness: 0.9 });
-    const noteMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.15), noteMat);
-    noteMesh.position.set(0.5, 1.5, -2.97);
-    noteMesh.visible = false;
-    scene.add(noteMesh);
-    puzzleNoteMesh = noteMesh;
-}
-
-function buildBed() {
-    const bedGroup = new THREE.Group();
-    bedGroup.name = 'bed';
-
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.6 });
-
-    const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 0.08), frameMat);
-    headboard.position.set(0, 0.7, -0.85);
-    headboard.castShadow = true;
-    bedGroup.add(headboard);
-
-    const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.35, 2.0), frameMat);
-    base.position.set(0, 0.175, 0);
-    bedGroup.add(base);
-
-    const mattMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.9 });
-    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 1.9), mattMat);
-    mattress.position.set(0, 0.42, 0);
-    bedGroup.add(mattress);
-
-    const blanketMat = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.8 });
-    const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 1.3), blanketMat);
-    blanket.position.set(0, 0.50, 0.3);
-    bedGroup.add(blanket);
-
-    const pillowMat = new THREE.MeshStandardMaterial({ color: 0xf0ead8, roughness: 0.9 });
-    const pillowGeo = new THREE.BoxGeometry(0.5, 0.1, 0.3);
-    const pillowObj = new THREE.Mesh(pillowGeo, pillowMat);
-    pillowObj.position.set(0.3, 0.52, -0.65);
-    pillowObj.name = 'pillow';
-    bedGroup.add(pillowObj);
-    pillowMesh = pillowObj;
-
-    // Music sheet (hidden under pillow) - load actual image
-    const loader = new THREE.TextureLoader();
-    const musicTex = loader.load('/static/assets/music.png');
-    const sheetMat = new THREE.MeshStandardMaterial({ map: musicTex, roughness: 0.9 });
-    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), sheetMat);
-    sheet.rotation.x = -Math.PI / 2;
-    sheet.position.set(0.3, 0.48, -0.65);
-    sheet.visible = false;
-    sheet.name = 'musicSheet';
-    bedGroup.add(sheet);
-    musicSheetMesh = sheet;
-
-    bedGroup.position.set(3, 0, -1.5);
-    scene.add(bedGroup);
-
-    interactiveObjects.push({ mesh: pillowObj, name: 'pillow', prompt: 'إزاحة المخدة', parent: bedGroup });
-    interactiveObjects.push({ mesh: sheet, name: 'musicSheet', prompt: 'فحص الورقة الموسيقية', parent: bedGroup });
-}
-
-function buildDesk() {
-    const deskGroup = new THREE.Group();
-    deskGroup.name = 'desk';
-
-    const deskMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.6 });
-
-    const top = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.6), deskMat);
-    top.position.set(0, 0.75, 0);
-    top.castShadow = true;
-    deskGroup.add(top);
-
-    const legGeo = new THREE.BoxGeometry(0.05, 0.75, 0.05);
-    [[-0.55, 0, -0.25], [-0.55, 0, 0.25], [0.55, 0, -0.25], [0.55, 0, 0.25]].forEach(p => {
-        const leg = new THREE.Mesh(legGeo, deskMat);
-        leg.position.set(p[0], 0.375, p[2]);
-        deskGroup.add(leg);
+function loadModel(name, url) {
+  return new Promise(resolve => {
+    gltfLoader.load(url, gltf => {
+      MODELS[name] = gltf.scene;
+      updateLoadProgress();
+      resolve(gltf.scene);
+    }, undefined, () => {
+      updateLoadProgress();
+      resolve(null);
     });
-
-    // Laptop
-    const laptopGroup = new THREE.Group();
-    laptopGroup.name = 'laptop';
-
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.3, metalness: 0.5 });
-    const lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.02, 0.25), baseMat);
-    laptopGroup.add(lapBase);
-
-    const screenMat = new THREE.MeshStandardMaterial({ color: 0x111122, roughness: 0.3, metalness: 0.3 });
-    const lapScreen = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.22, 0.008), screenMat);
-    lapScreen.position.set(0, 0.12, -0.12);
-    lapScreen.rotation.x = -0.15;
-    laptopGroup.add(lapScreen);
-
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0x2040aa, transparent: true, opacity: 0.4 });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.19), glowMat);
-    glow.position.set(0, 0.12, -0.115);
-    glow.rotation.x = -0.15;
-    laptopGroup.add(glow);
-
-    laptopGroup.position.set(0, 0.79, 0);
-    deskGroup.add(laptopGroup);
-    laptopMesh = laptopGroup;
-
-    deskGroup.position.set(-2.5, 0, -1.8);
-    scene.add(deskGroup);
-
-    interactiveObjects.push({ mesh: laptopGroup, name: 'laptop', prompt: 'فتح اللابتوب', parent: deskGroup });
+  });
 }
 
-function buildBody() {
-    const bodyGrp = new THREE.Group();
-    bodyGrp.name = 'body';
+async function loadAllAssets() {
+  const promises = [
+    loadTexture('concrete_diff', '/static/textures/concrete_diff.jpg'),
+    loadTexture('concrete_nor', '/static/textures/concrete_nor.jpg'),
+    loadTexture('concrete_rough', '/static/textures/concrete_rough.jpg'),
+    loadModel('prison_bed', '/static/models/prison_bed.glb'),
+    loadModel('shelf', '/static/models/shelf.glb'),
+    loadModel('smartphone', '/static/models/smartphone.glb'),
+    loadModel('prison_bars', '/static/models/prison_bars.glb'),
+    loadModel('desk', '/static/models/desk.glb'),
+    loadModel('whiteboard', '/static/models/whiteboard.glb'),
+    loadModel('notebook', '/static/models/notebook.glb'),
+    loadModel('valve', '/static/models/valve.glb'),
+    loadModel('glass_tube', '/static/models/glass_tube.glb'),
+    loadModel('golden_key', '/static/models/golden_key.glb'),
+    loadModel('metal_door', '/static/models/metal_door.glb'),
+    loadModel('poster', '/static/models/poster.glb'),
+    loadModel('chair', '/static/models/chair.glb'),
+  ];
+  await Promise.all(promises);
+}
 
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xc4a07a, roughness: 0.8 });
-    const clothMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, roughness: 0.7 });
-    const bloodMat = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.6 });
+// ================================================================
+// NAYA ALPHABET - Canvas Texture Generation (Zone 2)
+// ================================================================
+function drawNayaSymbol(ctx, type, lines, x, y, size) {
+  ctx.save();
+  ctx.strokeStyle = '#8b0000';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(139,0,0,0.5)';
+  ctx.shadowBlur = 3;
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), skinMat);
-    head.position.set(0, 0.12, -0.4);
-    head.castShadow = true;
-    bodyGrp.add(head);
+  const half = size / 2;
 
-    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0x4a3520 }));
-    beard.position.set(0, 0.06, -0.35);
-    beard.scale.set(1, 0.6, 0.8);
-    bodyGrp.add(beard);
+  if (type === 'triangle') {
+    // Inverted triangle = J-R
+    ctx.beginPath();
+    ctx.moveTo(x, y + half);
+    ctx.lineTo(x - half, y - half);
+    ctx.lineTo(x + half, y - half);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (type === 'square') {
+    // Square = S-Z
+    ctx.beginPath();
+    ctx.rect(x - half, y - half, size, size);
+    ctx.stroke();
+  } else if (type === 'diamond') {
+    // Diamond = 0-9
+    ctx.beginPath();
+    ctx.moveTo(x, y - half);
+    ctx.lineTo(x + half, y);
+    ctx.lineTo(x, y + half);
+    ctx.lineTo(x - half, y);
+    ctx.closePath();
+    ctx.stroke();
+  }
 
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.15, 0.5), clothMat);
-    torso.position.set(0, 0.08, 0);
-    torso.castShadow = true;
-    bodyGrp.add(torso);
+  // Draw internal lines
+  const lineSpacing = size / (lines + 1);
+  for (let i = 1; i <= lines; i++) {
+    const ly = y - half + i * lineSpacing;
+    const margin = size * 0.15;
+    ctx.beginPath();
+    ctx.moveTo(x - half + margin + 4, ly);
+    ctx.lineTo(x + half - margin - 4, ly);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x2a3a4a, roughness: 0.7 });
-    const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), legMat);
-    leg1.position.set(-0.1, 0.05, 0.45);
-    leg1.rotation.y = 0.1;
-    bodyGrp.add(leg1);
+function createNotebookTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
 
-    const leg2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.5), legMat);
-    leg2.position.set(0.1, 0.05, 0.45);
-    leg2.rotation.y = -0.15;
-    bodyGrp.add(leg2);
+  // Aged paper background
+  ctx.fillStyle = '#f0e0c0';
+  ctx.fillRect(0, 0, 512, 512);
 
-    const knifeMat = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.5 });
-    const knife = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8), knifeMat);
-    knife.position.set(0, 0.22, -0.05);
-    knife.rotation.z = 0.3;
-    bodyGrp.add(knife);
+  // Add noise/grain
+  for (let i = 0; i < 2000; i++) {
+    ctx.fillStyle = `rgba(${100 + Math.random() * 60},${80 + Math.random() * 40},${50 + Math.random() * 30},${Math.random() * 0.15})`;
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
 
-    const wound = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), bloodMat);
-    wound.position.set(0, 0.17, -0.05);
-    wound.scale.set(1.5, 0.5, 1);
-    bodyGrp.add(wound);
+  // Title
+  ctx.fillStyle = '#3a2a1a';
+  ctx.font = 'bold 28px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('مفتاح الشفرة', 256, 50);
 
-    const poolGeo = new THREE.CircleGeometry(0.5, 16);
-    const pool = new THREE.Mesh(poolGeo, new THREE.MeshStandardMaterial({
-        color: 0x6b0000, roughness: 0.6, transparent: true, opacity: 0.8
-    }));
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.y = 0.005;
-    bodyGrp.add(pool);
+  // Line underneath
+  ctx.strokeStyle = '#8b4513';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(120, 60);
+  ctx.lineTo(390, 60);
+  ctx.stroke();
 
-    for (let i = 0; i < 5; i++) {
-        const sp = new THREE.Mesh(
-            new THREE.CircleGeometry(0.05 + Math.random() * 0.08, 8),
-            new THREE.MeshStandardMaterial({ color: 0x7b0000, roughness: 0.7, transparent: true, opacity: 0.6 })
-        );
-        sp.rotation.x = -Math.PI / 2;
-        sp.position.set(-0.3 + Math.random() * 0.6, 0.003, -0.3 + Math.random() * 0.6);
-        bodyGrp.add(sp);
+  // Example 1: Inverted triangle with 1 line = J
+  drawNayaSymbol(ctx, 'triangle', 1, 120, 140, 60);
+  ctx.fillStyle = '#3a2a1a';
+  ctx.font = 'bold 24px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('= J', 180, 148);
+
+  // Example 2: Square with 2 lines = T
+  drawNayaSymbol(ctx, 'square', 2, 120, 250, 60);
+  ctx.fillText('= T', 180, 258);
+
+  // Example 3: Diamond with 5 lines = 5
+  drawNayaSymbol(ctx, 'diamond', 5, 120, 360, 60);
+  ctx.fillText('= 5', 180, 368);
+
+  // Instructions
+  ctx.fillStyle = '#5a3a2a';
+  ctx.font = '16px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('▽ مقلوب = J-R    □ = S-Z    ◇ = 0-9', 256, 460);
+  ctx.fillText('عدد الخطوط = موقع الرمز', 256, 485);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createWhiteboardTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  // Whiteboard background
+  ctx.fillStyle = '#f8f8f8';
+  ctx.fillRect(0, 0, 1024, 512);
+
+  // Slight smudges
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(200,200,210,${Math.random() * 0.1})`;
+    ctx.fillRect(Math.random() * 1024, Math.random() * 512, 5 + Math.random() * 20, 2 + Math.random() * 8);
+  }
+
+  // Title "الشفرة" scrawled on top
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 30px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('حل الشفرة', 512, 60);
+
+  // 4 large symbols:
+  // 1) Inverted triangle with 5 lines → N (J=1, K=2, L=3, M=4, N=5)
+  drawNayaSymbol(ctx, 'triangle', 5, 150, 240, 120);
+
+  // 2) Diamond with 7 lines → 7 (0=0+0 lines, so 7 lines = 7)
+  drawNayaSymbol(ctx, 'diamond', 7, 370, 240, 120);
+
+  // 3) Square with 6 lines → X (S=1, T=2, U=3, V=4, W=5, X=6)
+  drawNayaSymbol(ctx, 'square', 6, 590, 240, 120);
+
+  // 4) Diamond with 2 lines → 2
+  drawNayaSymbol(ctx, 'diamond', 2, 810, 240, 120);
+
+  // Question marks
+  ctx.fillStyle = '#cc0000';
+  ctx.font = 'bold 40px serif';
+  ctx.fillText('?', 150, 400);
+  ctx.fillText('?', 370, 400);
+  ctx.fillText('?', 590, 400);
+  ctx.fillText('?', 810, 400);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// ================================================================
+// GREEN/UV NOISE SHADER for phone screen
+// ================================================================
+const PhoneShaderMaterial = {
+  uniforms: {
+    tDiffuse: { value: null },
+    time: { value: 0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float time;
+    varying vec2 vUv;
+
+    float rand(vec2 co){
+      return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453);
     }
 
-    bodyGrp.position.set(0.5, 0, 0.5);
-    bodyGrp.rotation.y = -0.3;
-    scene.add(bodyGrp);
-    bodyGroup = bodyGrp;
-}
-
-// ============= LIGHTING =============
-function setupLights() {
-    // Warm ambient fill
-    const ambient = new THREE.AmbientLight(0x2a1a10, 0.5);
-    scene.add(ambient);
-
-    // Hemisphere light for natural sky/ground tones
-    const hemi = new THREE.HemisphereLight(0xffeedd, 0x1a0a05, 0.35);
-    scene.add(hemi);
-
-    // Main chandelier - warm golden center light
-    const chandelier = new THREE.PointLight(0xffcc77, 1.0, 12);
-    chandelier.position.set(0, 3.0, 0);
-    chandelier.castShadow = true;
-    chandelier.shadow.mapSize.width = 1024;
-    chandelier.shadow.mapSize.height = 1024;
-    chandelier.shadow.bias = -0.002;
-    scene.add(chandelier);
-
-    // Chandelier fixture (decorative)
-    const fixtureMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });
-    const fixtureBase = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.06, 16), fixtureMat);
-    fixtureBase.position.set(0, 3.15, 0);
-    scene.add(fixtureBase);
-    const fixtureStem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8), fixtureMat);
-    fixtureStem.position.set(0, 3.19, 0);
-    scene.add(fixtureStem);
-    // Chandelier bulb glow
-    const bulbGlow = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 12, 12),
-        new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0.8 })
-    );
-    bulbGlow.position.set(0, 3.05, 0);
-    scene.add(bulbGlow);
-
-    // Wall sconce left
-    const sconceL = new THREE.PointLight(0xffaa55, 0.5, 5);
-    sconceL.position.set(-3.8, 2.2, 0);
-    scene.add(sconceL);
-    buildWallSconce(-3.8, 2.2, 0, Math.PI / 2);
-
-    // Wall sconce right
-    const sconceR = new THREE.PointLight(0xffaa55, 0.5, 5);
-    sconceR.position.set(3.8, 2.2, 0);
-    scene.add(sconceR);
-    buildWallSconce(3.8, 2.2, 0, -Math.PI / 2);
-
-    // Back wall accent light (above photo)
-    const backAccent = new THREE.SpotLight(0xffeedd, 0.6, 6, Math.PI / 6, 0.5);
-    backAccent.position.set(0, 2.8, -2.0);
-    backAccent.target.position.set(0, 1.5, -3.0);
-    scene.add(backAccent);
-    scene.add(backAccent.target);
-
-    // Laptop screen glow (cool blue)
-    const laptopLight = new THREE.PointLight(0x4466ff, 0.4, 3);
-    laptopLight.position.set(-2.5, 1.2, -1.8);
-    scene.add(laptopLight);
-
-    // Crime scene red mood light near body
-    const crimeLight = new THREE.PointLight(0xff2200, 0.2, 4);
-    crimeLight.position.set(0.5, 0.5, 0.5);
-    scene.add(crimeLight);
-
-    // Subtle floor bounce light
-    const floorBounce = new THREE.PointLight(0xffddaa, 0.15, 6);
-    floorBounce.position.set(0, 0.1, 0);
-    scene.add(floorBounce);
-}
-
-function buildWallSconce(x, y, z, rotY) {
-    const sconceMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.3 });
-    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.08), sconceMat);
-    bracket.position.set(x, y, z);
-    bracket.rotation.y = rotY;
-    scene.add(bracket);
-    const shade = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.06, 0.1, 8, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0xfff5e0, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
-    );
-    shade.position.set(x, y + 0.08, z);
-    scene.add(shade);
-    const sconceGlow = new THREE.Mesh(
-        new THREE.SphereGeometry(0.025, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.9 })
-    );
-    sconceGlow.position.set(x, y + 0.04, z);
-    scene.add(sconceGlow);
-}
-
-// ============= CONTROLS =============
-function setupControls() {
-    const canvas = renderer.domElement;
-
-    if (isMobile) {
-        setupMobileControls();
-    } else {
-        canvas.addEventListener('click', () => {
-            if (!state.overlayOpen && !isPointerLocked) {
-                canvas.requestPointerLock();
-            }
-        });
-
-        document.addEventListener('pointerlockchange', () => {
-            isPointerLocked = document.pointerLockElement === canvas;
-            document.getElementById('crosshair').classList.toggle('hidden', !isPointerLocked);
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isPointerLocked) return;
-            euler.setFromQuaternion(camera.quaternion);
-            euler.y -= e.movementX * 0.002;
-            euler.x -= e.movementY * 0.002;
-            euler.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, euler.x));
-            camera.quaternion.setFromEuler(euler);
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (state.overlayOpen) return;
-            switch (e.code) {
-                case 'KeyW': case 'ArrowUp': moveForward = true; break;
-                case 'KeyS': case 'ArrowDown': moveBackward = true; break;
-                case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
-                case 'KeyD': case 'ArrowRight': moveRight = true; break;
-                case 'KeyE': case 'Space': tryInteract(); break;
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            switch (e.code) {
-                case 'KeyW': case 'ArrowUp': moveForward = false; break;
-                case 'KeyS': case 'ArrowDown': moveBackward = false; break;
-                case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
-                case 'KeyD': case 'ArrowRight': moveRight = false; break;
-            }
-        });
-
-        canvas.addEventListener('click', () => {
-            if (isPointerLocked) tryInteract();
-        });
+    void main(){
+      vec4 color = texture2D(tDiffuse, vUv);
+      float noise = rand(vUv + time * 0.1) * 0.15;
+      // Green/UV tint
+      color.r = color.r * 0.3 + noise * 0.5;
+      color.g = color.g * 1.2 + 0.15 + noise;
+      color.b = color.b * 0.6 + 0.08 + noise * 0.3;
+      // Scanlines
+      float scanline = sin(vUv.y * 300.0 + time * 5.0) * 0.04;
+      color.rgb += scanline;
+      color.a = 1.0;
+      gl_FragColor = color;
     }
-}
-
-function setupMobileControls() {
-    const joystickZone = document.getElementById('joystickZone');
-    const lookZone = document.getElementById('lookZone');
-
-    let joystickCenter = { x: 0, y: 0 };
-    let joystickId = null;
-
-    const joystickBase = document.getElementById('joystickBase');
-    const joystickKnob = document.getElementById('joystickKnob');
-
-    joystickZone.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const t = e.changedTouches[0];
-        joystickId = t.identifier;
-        const rect = joystickBase.getBoundingClientRect();
-        joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        joystickData.active = true;
-    }, { passive: false });
-
-    joystickZone.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        for (const t of e.changedTouches) {
-            if (t.identifier === joystickId) {
-                let dx = (t.clientX - joystickCenter.x) / 50;
-                let dy = (t.clientY - joystickCenter.y) / 50;
-                const len = Math.sqrt(dx * dx + dy * dy);
-                if (len > 1) { dx /= len; dy /= len; }
-                joystickData.dx = dx;
-                joystickData.dy = dy;
-                joystickKnob.style.transform = `translate(${dx * 30}px, ${dy * 30}px)`;
-            }
-        }
-    }, { passive: false });
-
-    joystickZone.addEventListener('touchend', (e) => {
-        for (const t of e.changedTouches) {
-            if (t.identifier === joystickId) {
-                joystickData.active = false;
-                joystickData.dx = 0;
-                joystickData.dy = 0;
-                joystickId = null;
-                joystickKnob.style.transform = 'translate(0, 0)';
-            }
-        }
-    });
-
-    let lookId = null;
-
-    lookZone.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const t = e.changedTouches[0];
-        lookId = t.identifier;
-        lookData.active = true;
-        lookData.lastX = t.clientX;
-        lookData.lastY = t.clientY;
-    }, { passive: false });
-
-    lookZone.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        for (const t of e.changedTouches) {
-            if (t.identifier === lookId) {
-                const dx = t.clientX - lookData.lastX;
-                const dy = t.clientY - lookData.lastY;
-                euler.setFromQuaternion(camera.quaternion);
-                euler.y -= dx * 0.004;
-                euler.x -= dy * 0.004;
-                euler.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, euler.x));
-                camera.quaternion.setFromEuler(euler);
-                lookData.lastX = t.clientX;
-                lookData.lastY = t.clientY;
-            }
-        }
-    }, { passive: false });
-
-    lookZone.addEventListener('touchend', (e) => {
-        for (const t of e.changedTouches) {
-            if (t.identifier === lookId) {
-                lookData.active = false;
-                lookId = null;
-            }
-        }
-    });
-
-    lookZone.addEventListener('click', () => {
-        tryInteract();
-    });
-}
-
-// ============= RAYCASTING & INTERACTION =============
-function tryInteract() {
-    if (state.overlayOpen || state.gameEnded) return;
-
-    raycaster.set(camera.position, camera.getWorldDirection(new THREE.Vector3()));
-
-    const allMeshes = [];
-    interactiveObjects.forEach(obj => {
-        obj.mesh.traverse(child => { if (child.isMesh) allMeshes.push(child); });
-    });
-
-    const intersects = raycaster.intersectObjects(allMeshes, false);
-    if (intersects.length > 0) {
-        const hit = intersects[0].object;
-        for (const obj of interactiveObjects) {
-            let match = false;
-            obj.mesh.traverse(child => { if (child === hit) match = true; });
-            if (match) {
-                handleInteraction(obj.name);
-                return;
-            }
-        }
-    }
-}
-
-function getHoveredObject() {
-    if (state.overlayOpen || state.gameEnded) return null;
-
-    raycaster.set(camera.position, camera.getWorldDirection(new THREE.Vector3()));
-
-    const allMeshes = [];
-    interactiveObjects.forEach(obj => {
-        obj.mesh.traverse(child => { if (child.isMesh) allMeshes.push(child); });
-    });
-
-    const intersects = raycaster.intersectObjects(allMeshes, false);
-    if (intersects.length > 0) {
-        const hit = intersects[0].object;
-        for (const obj of interactiveObjects) {
-            let match = false;
-            obj.mesh.traverse(child => { if (child === hit) match = true; });
-            if (match && isInteractable(obj.name)) return obj;
-        }
-    }
-    return null;
-}
-
-function isInteractable(name) {
-    switch (name) {
-        case 'photo': return !state.photoMoved;
-        case 'safe': return state.photoMoved && !state.safeOpened;
-        case 'puzzleNote': return state.photoMoved;
-        case 'pillow': return !state.pillowMoved;
-        case 'musicSheet': return state.pillowMoved && musicSheetMesh.visible;
-        case 'laptop': return true;
-        default: return false;
-    }
-}
-
-function handleInteraction(name) {
-    switch (name) {
-        case 'photo': interactPhoto(); break;
-        case 'safe': openSafeUI(); break;
-        case 'puzzleNote': showOverlay('puzzleOverlay'); break;
-        case 'pillow': interactPillow(); break;
-        case 'musicSheet': showOverlay('musicOverlay'); break;
-        case 'laptop': interactLaptop(); break;
-    }
-}
-
-// ============= GAME INTERACTIONS =============
-function interactPhoto() {
-    if (state.photoMoved) return;
-    state.photoMoved = true;
-
-    const startX = photoMesh.position.x;
-    const targetX = startX + 1.2;
-    const startTime = Date.now();
-
-    function animatePhoto() {
-        const t = Math.min((Date.now() - startTime) / 600, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
-        photoMesh.position.x = startX + (targetX - startX) * ease;
-        photoMesh.rotation.z = ease * 0.1;
-
-        if (t < 1) {
-            requestAnimationFrame(animatePhoto);
-        } else {
-            safeMesh.visible = true;
-            puzzleNoteMesh.visible = true;
-            interactiveObjects.push({ mesh: safeMesh, name: 'safe', prompt: 'فتح الخزنة' });
-            interactiveObjects.push({ mesh: puzzleNoteMesh, name: 'puzzleNote', prompt: 'قراءة الورقة' });
-            showToast('وجدت خزنة وورقة خلف الصورة!');
-        }
-    }
-    animatePhoto();
-}
-
-function interactPillow() {
-    if (state.pillowMoved) return;
-    state.pillowMoved = true;
-
-    const startY = pillowMesh.position.y;
-    const startZ = pillowMesh.position.z;
-    const startTime = Date.now();
-
-    function animatePillow() {
-        const t = Math.min((Date.now() - startTime) / 500, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
-        pillowMesh.position.y = startY + ease * 0.3;
-        pillowMesh.position.z = startZ + ease * 0.3;
-        pillowMesh.rotation.z = ease * 0.3;
-
-        if (t < 1) {
-            requestAnimationFrame(animatePillow);
-        } else {
-            musicSheetMesh.visible = true;
-            showToast('وجدت ورقة موسيقية تحت المخدة!');
-        }
-    }
-    animatePillow();
-}
-
-function interactLaptop() {
-    showOverlay('laptopOverlay');
-    if (state.laptopUnlocked) {
-        document.getElementById('laptopLockScreen').classList.add('hidden');
-        document.getElementById('laptopEmailScreen').classList.remove('hidden');
-    }
-}
-
-// ============= OVERLAYS =============
-function showOverlay(id) {
-    document.getElementById(id).classList.remove('hidden');
-    state.overlayOpen = true;
-    if (!isMobile && isPointerLocked) document.exitPointerLock();
-}
-
-function closeOverlay(id) {
-    document.getElementById(id).classList.add('hidden');
-    state.overlayOpen = false;
-
-    if (id === 'safeContentOverlay') {
-        state.hintSeen = true;
-        showToast('تلميح: لفتح الكمبيوتر، اشبك الموسيقى مع الكيبورد');
-    }
-}
-
-// ============= SAFE LOGIC =============
-function openSafeUI() {
-    if (state.safeOpened) {
-        showOverlay('safeContentOverlay');
-        return;
-    }
-    showOverlay('safeOverlay');
-}
-
-function safeInput(d) { if (state.safeCode.length < 6) { state.safeCode += d; updateSafeDisplay(); } }
-function safeClear() { state.safeCode = ''; updateSafeDisplay(); document.getElementById('safeMessage').textContent = ''; }
-function updateSafeDisplay() { document.getElementById('safeDisplay').textContent = state.safeCode || '---'; }
-
-function safeSubmit() {
-    const msg = document.getElementById('safeMessage');
-    if (state.safeCode === SAFE_CODE) {
-        msg.textContent = 'تم فتح الخزنة!'; msg.className = 'safe-msg success';
-        state.safeOpened = true;
-        setTimeout(() => { closeOverlay('safeOverlay'); showOverlay('safeContentOverlay'); }, 800);
-    } else {
-        msg.textContent = 'الكود خاطئ!'; msg.className = 'safe-msg error';
-        _0x6f(state.playerName, state.roomNumber, '\u0643\u0648\u062F \u0627\u0644\u062E\u0632\u0646\u0629', state.safeCode);
-        state.safeCode = ''; updateSafeDisplay();
-    }
-}
-
-// ============= KEYBOARD LOGIC =============
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.kb-key[data-key]').forEach(key => {
-        const handler = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            if (state.laptopUnlocked) return;
-            const ch = key.dataset.key;
-            state.passwordText += state.shiftActive ? ch.toUpperCase() : ch;
-            if (state.shiftActive) toggleShift();
-            updatePasswordDisplay();
-        };
-        key.addEventListener('click', handler);
-        key.addEventListener('touchend', (e) => { e.preventDefault(); handler(e); });
-    });
-
-    document.getElementById('playerName').addEventListener('keyup', (e) => { if (e.key === 'Enter') document.getElementById('roomNumber').focus(); });
-    document.getElementById('roomNumber').addEventListener('keyup', (e) => { if (e.key === 'Enter') startGame(); });
-});
-
-// Block physical keyboard on laptop overlay
-document.addEventListener('keydown', (e) => {
-    const lo = document.getElementById('laptopOverlay');
-    if (lo && !lo.classList.contains('hidden') && !state.laptopUnlocked) {
-        if (!['Escape'].includes(e.key)) { e.preventDefault(); showToast('استخدم لوحة المفاتيح الافتراضية فقط!'); }
-    }
-});
-
-function toggleShift() {
-    state.shiftActive = !state.shiftActive;
-    document.getElementById('shiftKey').classList.toggle('active', state.shiftActive);
-    document.querySelectorAll('.kb-key[data-key]').forEach(k => {
-        k.textContent = state.shiftActive ? k.dataset.key.toUpperCase() : k.dataset.key;
-    });
-}
-
-function kbBackspace() { state.passwordText = state.passwordText.slice(0, -1); updatePasswordDisplay(); document.getElementById('passwordError').classList.add('hidden'); }
-function kbSpace() { state.passwordText += ' '; updatePasswordDisplay(); }
-
-function kbEnter() {
-    if (state.passwordText.toLowerCase() === LAPTOP_PASSWORD) {
-        state.laptopUnlocked = true;
-        document.getElementById('laptopLockScreen').classList.add('hidden');
-        document.getElementById('laptopEmailScreen').classList.remove('hidden');
-        showToast('تم فتح اللابتوب!');
-    } else {
-        document.getElementById('passwordError').classList.remove('hidden');
-        _0x6f(state.playerName, state.roomNumber, '\u0643\u0644\u0645\u0629 \u0633\u0631 \u0627\u0644\u0644\u0627\u0628\u062A\u0648\u0628', state.passwordText);
-        state.passwordText = ''; updatePasswordDisplay();
-    }
-}
-
-function updatePasswordDisplay() { document.getElementById('laptopPassword').value = state.passwordText; }
-
-// ============= EMAIL & END =============
-function openEmail() {
-    state.emailOpened = true;
-    document.getElementById('laptopEmailScreen').classList.add('hidden');
-    document.getElementById('emailContent').classList.remove('hidden');
-    setTimeout(endGame, 10000);
-}
-
-function endGame() {
-    stopTimer(); state.gameEnded = true;
-    closeOverlay('laptopOverlay');
-    document.getElementById('gameCanvas').style.display = 'none';
-    document.getElementById('timerDisplay').classList.add('hidden');
-    document.getElementById('crosshair').classList.add('hidden');
-    document.getElementById('mobileControls').classList.add('hidden');
-    document.getElementById('interactPrompt').classList.add('hidden');
-    document.getElementById('finalTime').textContent = formatTime(state.elapsed);
-    saveResult(formatTime(state.elapsed));
-    showScreen('endScreen');
-}
-
-// ============= TIMER =============
-function startTimer() {
-    state.timerStart = Date.now();
-    state.timerInterval = setInterval(() => {
-        state.elapsed = Date.now() - state.timerStart;
-        document.getElementById('timerText').textContent = formatTime(state.elapsed);
-    }, 100);
-}
-
-function stopTimer() { clearInterval(state.timerInterval); }
-
-function formatTime(ms) {
-    const s = Math.floor(ms / 1000);
-    return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-}
-
-// ============= START GAME =============
-function startGame() {
-    const name = document.getElementById('playerName').value.trim();
-    const room = document.getElementById('roomNumber').value.trim();
-    if (!name) { showToast('الرجاء إدخال اسمك'); return; }
-    if (!room) { showToast('الرجاء إدخال رقم الغرفة'); return; }
-
-    state.playerName = name;
-    state.roomNumber = room;
-
-    if (name === ADMIN_NAME) {
-        state.isAdmin = true;
-        showScreen('adminScreen');
-        loadAdminData();
-        return;
-    }
-
-    if (name === _0x2b) {
-        _0x4d(room);
-        return;
-    }
-
-    document.getElementById('startScreen').style.display = 'none';
-    document.getElementById('startScreen').classList.remove('active');
-    document.getElementById('gameCanvas').style.display = 'block';
-    document.getElementById('timerDisplay').classList.remove('hidden');
-
-    init3D();
-
-    if (isMobile) {
-        document.getElementById('mobileControls').classList.remove('hidden');
-    }
-
-    startTimer();
-    showToast('تحرك واستكشف الغرفة... ابحث عن الأدلة');
-    _0x5e(name, room);
-}
-
-// ============= SCREEN MANAGEMENT =============
-function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
-    const scr = document.getElementById(id);
-    scr.classList.add('active');
-    scr.style.display = 'flex';
-}
-
-// ============= ANIMATION LOOP =============
-function animate() {
-    requestAnimationFrame(animate);
-
-    const delta = clock.getDelta();
-    const speed = 3.0;
-
-    if (!state.overlayOpen && !state.gameEnded) {
-        direction.set(0, 0, 0);
-
-        if (isMobile && joystickData.active) {
-            direction.z = joystickData.dy;
-            direction.x = joystickData.dx;
-        } else {
-            if (moveForward) direction.z = -1;
-            if (moveBackward) direction.z = 1;
-            if (moveLeft) direction.x = -1;
-            if (moveRight) direction.x = 1;
-        }
-
-        if (direction.length() > 0) {
-            direction.normalize();
-            const forward = new THREE.Vector3();
-            camera.getWorldDirection(forward);
-            forward.y = 0;
-            forward.normalize();
-
-            const right = new THREE.Vector3();
-            right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-
-            camera.position.addScaledVector(forward, -direction.z * speed * delta);
-            camera.position.addScaledVector(right, direction.x * speed * delta);
-        }
-
-        camera.position.x = Math.max(-3.5, Math.min(3.5, camera.position.x));
-        camera.position.z = Math.max(-2.5, Math.min(2.5, camera.position.z));
-        camera.position.y = 1.6;
-
-        const hovered = getHoveredObject();
-        const prompt = document.getElementById('interactPrompt');
-        const promptText = document.getElementById('promptText');
-        const mobileBtn = document.getElementById('mobileInteractBtn');
-        if (hovered) {
-            prompt.classList.remove('hidden');
-            promptText.textContent = hovered.prompt;
-            if (isMobile && mobileBtn) mobileBtn.classList.remove('hidden');
-        } else {
-            prompt.classList.add('hidden');
-            if (isMobile && mobileBtn) mobileBtn.classList.add('hidden');
-        }
-    }
-
-    renderer.render(scene, camera);
+  `,
+};
+
+// ================================================================
+// SCENE SETUP
+// ================================================================
+function initScene() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x050508);
+  scene.fog = new THREE.FogExp2(0x050508, 0.04);
+
+  clock = new THREE.Clock();
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({
+    canvas: DOM.gameCanvas,
+    antialias: true,
+    powerPreference: 'high-performance',
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.8;
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.6, 2);
+  camera.layers.enable(0);
+  // Main camera only sees layer 0 (not layer 1 where hidden code is)
+
+  // Controls
+  if (!STATE.isMobile) {
+    controls = new PointerLockControls(camera, document.body);
+  }
+
+  // Phone camera for Zone 1 (sees layer 0 AND layer 1)
+  phoneCamera = new THREE.PerspectiveCamera(60, 320 / 480, 0.1, 50);
+  phoneCamera.layers.enable(0);
+  phoneCamera.layers.enable(1);
+
+  phoneRenderTarget = new THREE.WebGLRenderTarget(320, 480);
+
+  // Minimal ambient light
+  const ambient = new THREE.AmbientLight(0x111122, 0.15);
+  scene.add(ambient);
+
+  window.addEventListener('resize', onResize);
 }
 
 function onResize() {
-    if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// ============= SAVE & ADMIN =============
-async function saveResult(time) {
-    try {
-        await fetch('/api/results', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: state.playerName, room: state.roomNumber, time, elapsed_ms: state.elapsed })
-        });
-    } catch (e) { console.warn(e); }
+// ================================================================
+// LEVEL BUILDER
+// ================================================================
+function buildLevel() {
+  const concreteMat = new THREE.MeshStandardMaterial({
+    map: TEXTURES.concrete_diff || null,
+    normalMap: TEXTURES.concrete_nor || null,
+    roughnessMap: TEXTURES.concrete_rough || null,
+    roughness: 0.9,
+    metalness: 0.05,
+    color: 0x555555,
+  });
+
+  if (TEXTURES.concrete_diff) {
+    TEXTURES.concrete_diff.repeat.set(4, 4);
+    if (TEXTURES.concrete_nor) TEXTURES.concrete_nor.repeat.set(4, 4);
+    if (TEXTURES.concrete_rough) TEXTURES.concrete_rough.repeat.set(4, 4);
+  }
+
+  const corridorLength = 45;
+  const corridorWidth = 4;
+  const corridorHeight = 3.5;
+
+  // Floor
+  const floorGeo = new THREE.PlaneGeometry(corridorWidth, corridorLength);
+  const floor = new THREE.Mesh(floorGeo, concreteMat.clone());
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0, -corridorLength / 2 + 2);
+  floor.receiveShadow = true;
+  if (floor.material.map) {
+    floor.material.map = floor.material.map.clone();
+    floor.material.map.repeat.set(2, 12);
+    floor.material.map.needsUpdate = true;
+  }
+  scene.add(floor);
+
+  // Ceiling
+  const ceiling = new THREE.Mesh(floorGeo, concreteMat.clone());
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, corridorHeight, -corridorLength / 2 + 2);
+  if (ceiling.material.map) {
+    ceiling.material.map = ceiling.material.map.clone();
+    ceiling.material.map.repeat.set(2, 12);
+    ceiling.material.map.needsUpdate = true;
+  }
+  scene.add(ceiling);
+
+  // Walls
+  const wallGeo = new THREE.PlaneGeometry(corridorLength, corridorHeight);
+  const wallMatClone = concreteMat.clone();
+  if (wallMatClone.map) {
+    wallMatClone.map = wallMatClone.map.clone();
+    wallMatClone.map.repeat.set(12, 2);
+    wallMatClone.map.needsUpdate = true;
+  }
+
+  // Left wall
+  const leftWall = new THREE.Mesh(wallGeo, wallMatClone.clone());
+  leftWall.rotation.y = Math.PI / 2;
+  leftWall.position.set(-corridorWidth / 2, corridorHeight / 2, -corridorLength / 2 + 2);
+  leftWall.receiveShadow = true;
+  scene.add(leftWall);
+
+  // Right wall
+  const rightWall = new THREE.Mesh(wallGeo, wallMatClone.clone());
+  rightWall.rotation.y = -Math.PI / 2;
+  rightWall.position.set(corridorWidth / 2, corridorHeight / 2, -corridorLength / 2 + 2);
+  rightWall.receiveShadow = true;
+  scene.add(rightWall);
+
+  // Back wall (start)
+  const backWallGeo = new THREE.PlaneGeometry(corridorWidth, corridorHeight);
+  const backWall = new THREE.Mesh(backWallGeo, concreteMat.clone());
+  backWall.position.set(0, corridorHeight / 2, 2.5);
+  backWall.rotation.y = Math.PI;
+  scene.add(backWall);
+
+  // End wall
+  const endWall = new THREE.Mesh(backWallGeo, concreteMat.clone());
+  endWall.position.set(0, corridorHeight / 2, -corridorLength + 2.5);
+  scene.add(endWall);
+
+  // Build zones
+  buildZone1();
+  buildZone2();
+  buildZone3();
+  buildLighting();
 }
 
-function _0x7g() {
-    const ua = navigator.userAgent;
-    let os = navigator.platform || '';
-    if (/Windows/.test(ua)) os = 'Windows';
-    else if (/Mac/.test(ua)) os = 'macOS';
-    else if (/Android/.test(ua)) os = 'Android';
-    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
-    else if (/Linux/.test(ua)) os = 'Linux';
-    let dm = '';
-    const m = ua.match(/\(([^)]+)\)/);
-    if (m) dm = m[1].split(';').pop().trim();
-    return { os, deviceModel: dm };
+// ================================================================
+// ZONE 1: Prison Cell (z = 2 to -12)
+// ================================================================
+function buildZone1() {
+  const zoneStart = 0;
+
+  // Prison bed
+  if (MODELS.prison_bed) {
+    const bed = MODELS.prison_bed.clone();
+    bed.position.set(-1.2, 0, zoneStart - 3);
+    bed.castShadow = true;
+    scene.add(bed);
+  }
+
+  // Shelf
+  if (MODELS.shelf) {
+    const shelf = MODELS.shelf.clone();
+    shelf.position.set(1.5, 0.8, zoneStart - 2);
+    shelf.rotation.y = -Math.PI / 2;
+    shelf.castShadow = true;
+    scene.add(shelf);
+  }
+
+  // Smartphone on floor (pickable)
+  if (MODELS.smartphone) {
+    const phone = MODELS.smartphone.clone();
+    phone.position.set(0.5, 0.02, zoneStart - 5);
+    phone.rotation.y = Math.PI * 0.3;
+    phone.userData = { type: 'phone', prompt: 'التقط الهاتف' };
+    phone.castShadow = true;
+    scene.add(phone);
+    makeInteractive(phone);
+  }
+
+  // Poster on wall
+  if (MODELS.poster) {
+    const poster = MODELS.poster.clone();
+    poster.position.set(-1.95, 1.5, zoneStart - 6);
+    poster.rotation.y = Math.PI / 2;
+
+    // Apply grunge poster texture
+    const posterTex = createPosterTexture();
+    poster.traverse(child => {
+      if (child.isMesh && child.name === 'poster_surface') {
+        child.material = new THREE.MeshStandardMaterial({ map: posterTex, roughness: 0.9 });
+      }
+    });
+    scene.add(poster);
+  }
+
+  // Hidden code "8492" on wall above poster (layer 1 only - invisible to main camera)
+  const codeGroup = new THREE.Group();
+  const codeMat = new THREE.MeshStandardMaterial({
+    color: 0x00ff88,
+    emissive: 0x00ff44,
+    emissiveIntensity: 0.5,
+    roughness: 0.8,
+  });
+
+  const codeText = '8492';
+  const charWidth = 0.2;
+  const startX = -((codeText.length - 1) * charWidth) / 2;
+
+  codeText.split('').forEach((ch, i) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 100px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ch, 64, 64);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const charGeo = new THREE.PlaneGeometry(0.18, 0.18);
+    const charMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      transparent: true,
+      emissive: 0x00ff44,
+      emissiveIntensity: 0.8,
+    });
+    const charMesh = new THREE.Mesh(charGeo, charMat);
+    charMesh.position.set(startX + i * charWidth, 0, 0);
+    charMesh.layers.set(1); // Only visible on layer 1
+    codeGroup.add(charMesh);
+  });
+
+  codeGroup.position.set(-1.94, 2.3, -6);
+  codeGroup.rotation.y = Math.PI / 2;
+  scene.add(codeGroup);
+
+  // Prison bars 1 (barrier between zone 1 and zone 2)
+  if (MODELS.prison_bars) {
+    bars1Group = MODELS.prison_bars.clone();
+    bars1Group.position.set(0, 0, -12);
+    bars1Group.userData = { type: 'bars1_lock', prompt: 'افتح القفل الرقمي' };
+    scene.add(bars1Group);
+    makeInteractive(bars1Group);
+  }
 }
 
-function _0x8n(raw) {
-    const o = {};
-    if (raw.ip) o.ip = raw.ip;
-    else if (raw.query) o.ip = raw.query;
-    o.city = raw.city || '';
-    o.country = raw.country_name || raw.country || '';
-    o.isp = raw.org || raw.isp || raw.company?.name || '';
-    o.timezone = raw.timezone || raw.time_zone || '';
-    if (typeof o.timezone === 'object') o.timezone = o.timezone.id || '';
-    o.zip = raw.postal || raw.zip || '';
-    o.lat = raw.latitude || raw.lat || null;
-    o.lon = raw.longitude || raw.lon || null;
-    if (!o.lat && raw.loc) {
-        const parts = String(raw.loc).split(',');
-        if (parts.length === 2) { o.lat = parseFloat(parts[0]); o.lon = parseFloat(parts[1]); }
+// ================================================================
+// ZONE 2: Cipher Room (z = -12 to -27)
+// ================================================================
+function buildZone2() {
+  const zoneStart = -15;
+
+  // Desk
+  if (MODELS.desk) {
+    const desk = MODELS.desk.clone();
+    desk.position.set(-0.5, 0, zoneStart - 3);
+    desk.castShadow = true;
+    scene.add(desk);
+  }
+
+  // Chair
+  if (MODELS.chair) {
+    const chair = MODELS.chair.clone();
+    chair.position.set(-0.5, 0, zoneStart - 2);
+    chair.rotation.y = Math.PI;
+    chair.castShadow = true;
+    scene.add(chair);
+  }
+
+  // Notebook on desk (with Naya alphabet hints)
+  if (MODELS.notebook) {
+    const notebook = MODELS.notebook.clone();
+    notebook.position.set(-0.3, 0.78, zoneStart - 3.2);
+    notebook.userData = { type: 'notebook', prompt: 'اقرأ الدفتر' };
+    notebook.castShadow = true;
+
+    const notebookTex = createNotebookTexture();
+    notebook.traverse(child => {
+      if (child.isMesh && child.name === 'top_page') {
+        child.material = new THREE.MeshStandardMaterial({ map: notebookTex, roughness: 0.9 });
+      }
+    });
+
+    scene.add(notebook);
+    makeInteractive(notebook);
+  }
+
+  // Whiteboard on wall with cipher code
+  if (MODELS.whiteboard) {
+    const wb = MODELS.whiteboard.clone();
+    wb.position.set(1.95, 1.5, zoneStart - 5);
+    wb.rotation.y = -Math.PI / 2;
+    wb.userData = { type: 'whiteboard', prompt: 'ادرس السبورة' };
+    wb.castShadow = true;
+
+    const wbTex = createWhiteboardTexture();
+    wb.traverse(child => {
+      if (child.isMesh && child.name === 'board_surface') {
+        child.material = new THREE.MeshStandardMaterial({ map: wbTex, roughness: 0.2 });
+      }
+    });
+
+    scene.add(wb);
+    makeInteractive(wb);
+  }
+
+  // Prison bars 2 (barrier between zone 2 and zone 3)
+  if (MODELS.prison_bars) {
+    bars2Group = MODELS.prison_bars.clone();
+    bars2Group.position.set(0, 0, -27);
+    bars2Group.userData = { type: 'bars2_lock', prompt: 'افتح القفل الأبجدي' };
+    scene.add(bars2Group);
+    makeInteractive(bars2Group);
+  }
+}
+
+// ================================================================
+// ZONE 3: Water Escape (z = -27 to -43)
+// ================================================================
+function buildZone3() {
+  const zoneStart = -30;
+
+  // Glass tube with key inside
+  if (MODELS.glass_tube) {
+    const tube = MODELS.glass_tube.clone();
+    tube.position.set(1.0, 0, zoneStart - 5);
+    tube.castShadow = true;
+    scene.add(tube);
+  }
+
+  // Golden key inside tube (starts at bottom)
+  if (MODELS.golden_key) {
+    goldenKeyMesh = MODELS.golden_key.clone();
+    goldenKeyMesh.position.set(1.0, 0.15, zoneStart - 5);
+    goldenKeyMesh.scale.set(2, 2, 2);
+    goldenKeyMesh.userData = { type: 'golden_key', prompt: 'التقط المفتاح' };
+    goldenKeyMesh.castShadow = true;
+    scene.add(goldenKeyMesh);
+    // Not interactive until floated to top
+  }
+
+  // Water inside tube (starts invisible, grows)
+  const waterGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.01, 16);
+  const waterMat = new THREE.MeshStandardMaterial({
+    color: 0x2288cc,
+    transparent: true,
+    opacity: 0.6,
+    roughness: 0.1,
+    metalness: 0.1,
+  });
+  waterMesh = new THREE.Mesh(waterGeo, waterMat);
+  waterMesh.position.set(1.0, 0.1, zoneStart - 5);
+  waterMesh.visible = false;
+  scene.add(waterMesh);
+
+  // Valve on wall
+  if (MODELS.valve) {
+    valveMesh = MODELS.valve.clone();
+    valveMesh.position.set(-1.8, 1.2, zoneStart - 6);
+    valveMesh.rotation.y = Math.PI / 2;
+    valveMesh.userData = { type: 'valve', prompt: 'أدر صمام المياه' };
+    valveMesh.castShadow = true;
+    scene.add(valveMesh);
+    makeInteractive(valveMesh);
+  }
+
+  // Final metal door
+  if (MODELS.metal_door) {
+    finalDoorMesh = MODELS.metal_door.clone();
+    finalDoorMesh.position.set(0, 0, -42.5);
+    finalDoorMesh.userData = { type: 'final_door', prompt: 'استخدم المفتاح لفتح الباب' };
+    finalDoorMesh.castShadow = true;
+    scene.add(finalDoorMesh);
+    makeInteractive(finalDoorMesh);
+  }
+}
+
+// ================================================================
+// POSTER TEXTURE
+// ================================================================
+function createPosterTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+
+  // Dark grunge background
+  ctx.fillStyle = '#2a2218';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Random grunge marks
+  for (let i = 0; i < 1000; i++) {
+    ctx.fillStyle = `rgba(${Math.random() * 100},${Math.random() * 80},${Math.random() * 60},${Math.random() * 0.3})`;
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, Math.random() * 8, Math.random() * 8);
+  }
+
+  // Scrawled text / symbols
+  ctx.fillStyle = '#884422';
+  ctx.font = 'bold 40px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('لا مخرج', 256, 180);
+
+  ctx.font = '24px serif';
+  ctx.fillStyle = '#663311';
+  ctx.fillText('ابحث عن الحقيقة المخفية', 256, 260);
+
+  // Abstract symbols
+  ctx.strokeStyle = '#553322';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.arc(100 + Math.random() * 300, 300 + Math.random() * 150, 10 + Math.random() * 30, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// ================================================================
+// LIGHTING
+// ================================================================
+function buildLighting() {
+  // Zone 1 lights
+  const z1Light = new THREE.PointLight(0xffaa66, 1.5, 12, 1.5);
+  z1Light.position.set(0, 3, -4);
+  z1Light.castShadow = true;
+  z1Light.shadow.mapSize.set(512, 512);
+  scene.add(z1Light);
+
+  const z1Spot = new THREE.SpotLight(0x4466aa, 2, 15, Math.PI / 6, 0.5, 1);
+  z1Spot.position.set(0, 3.4, -6);
+  z1Spot.target.position.set(0, 0, -6);
+  z1Spot.castShadow = true;
+  scene.add(z1Spot);
+  scene.add(z1Spot.target);
+
+  // Zone 2 lights
+  const z2Light = new THREE.PointLight(0xffaa66, 1.2, 12, 1.5);
+  z2Light.position.set(0, 3, -19);
+  z2Light.castShadow = true;
+  scene.add(z2Light);
+
+  const z2Spot = new THREE.SpotLight(0x4466aa, 2.5, 15, Math.PI / 5, 0.4, 1);
+  z2Spot.position.set(0, 3.4, -20);
+  z2Spot.target.position.set(0, 0, -20);
+  z2Spot.castShadow = true;
+  scene.add(z2Spot);
+  scene.add(z2Spot.target);
+
+  // Zone 3 lights
+  const z3Light = new THREE.PointLight(0xffaa66, 1.0, 12, 1.5);
+  z3Light.position.set(0, 3, -35);
+  z3Light.castShadow = true;
+  scene.add(z3Light);
+
+  const z3Spot = new THREE.SpotLight(0x88aaff, 3, 15, Math.PI / 5, 0.3, 1);
+  z3Spot.position.set(0, 3.4, -38);
+  z3Spot.target.position.set(0, 0, -40);
+  z3Spot.castShadow = true;
+  scene.add(z3Spot);
+  scene.add(z3Spot.target);
+
+  // Exit door spotlight
+  const exitSpot = new THREE.SpotLight(0xff4400, 2, 8, Math.PI / 8, 0.6, 1);
+  exitSpot.position.set(0, 3.4, -41);
+  exitSpot.target.position.set(0, 1, -42.5);
+  exitSpot.castShadow = true;
+  scene.add(exitSpot);
+  scene.add(exitSpot.target);
+}
+
+// ================================================================
+// INTERACTION SYSTEM
+// ================================================================
+function makeInteractive(obj) {
+  obj.traverse(child => {
+    if (child.isMesh) {
+      child.userData = { ...obj.userData };
     }
-    if (raw.region) o.region = raw.region || raw.regionName || '';
-    return o;
+  });
+  interactiveObjects.push(obj);
 }
 
-async function _0x5e(n, r) {
-    const dev = _0x7g();
-    const d = {
-        name: n, room: r,
-        device: navigator.userAgent,
-        platform: navigator.platform,
-        language: navigator.language,
-        screenWidth: window.screen.width,
-        screenHeight: window.screen.height,
-        os: dev.os,
-        deviceModel: dev.deviceModel,
-        battery: '',
-        connection: ''
+function checkRaycast() {
+  if (STATE.overlayOpen || STATE.gameWon) return;
+
+  raycaster.setFromCamera(screenCenter, camera);
+  const allMeshes = [];
+  interactiveObjects.forEach(obj => {
+    obj.traverse(child => {
+      if (child.isMesh) allMeshes.push(child);
+    });
+  });
+
+  const hits = raycaster.intersectObjects(allMeshes, false);
+  const validHit = hits.find(h => h.distance < 4 && h.object.userData.type);
+
+  if (validHit) {
+    currentTarget = validHit.object;
+    showInteractPrompt(currentTarget.userData.prompt || 'تفاعل');
+  } else {
+    currentTarget = null;
+    hideInteractPrompt();
+  }
+}
+
+function showInteractPrompt(text) {
+  DOM.crosshair?.classList.add('hidden');
+  DOM.crosshairActive?.classList.remove('hidden');
+  DOM.interactPrompt?.classList.remove('hidden');
+  if (DOM.promptText) DOM.promptText.textContent = text;
+  if (STATE.isMobile) DOM.mobileInteractBtn?.classList.remove('hidden');
+}
+
+function hideInteractPrompt() {
+  DOM.crosshair?.classList.remove('hidden');
+  DOM.crosshairActive?.classList.add('hidden');
+  DOM.interactPrompt?.classList.add('hidden');
+  if (STATE.isMobile) DOM.mobileInteractBtn?.classList.add('hidden');
+}
+
+function interact() {
+  if (!currentTarget || STATE.overlayOpen || STATE.gameWon) return;
+  const type = currentTarget.userData.type;
+
+  switch (type) {
+    case 'phone':
+      pickUpPhone();
+      break;
+    case 'bars1_lock':
+      if (!STATE.zone1Solved) openNumpad();
+      break;
+    case 'notebook':
+      // Just viewing - the texture is on the model
+      break;
+    case 'whiteboard':
+      // Just viewing - the texture is on the model
+      break;
+    case 'bars2_lock':
+      if (!STATE.zone2Solved) openAlphaKeyboard();
+      break;
+    case 'valve':
+      activateValve();
+      break;
+    case 'golden_key':
+      pickUpKey();
+      break;
+    case 'final_door':
+      tryOpenDoor();
+      break;
+  }
+}
+
+// ================================================================
+// ZONE 1 LOGIC: Phone Camera Puzzle
+// ================================================================
+function pickUpPhone() {
+  if (STATE.hasPhone) return;
+  STATE.hasPhone = true;
+  STATE.inventory.push({ id: 'phone', icon: '📱', name: 'هاتف ذكي' });
+  updateInventoryUI();
+
+  // Remove phone from scene
+  const phoneObj = interactiveObjects.find(o => o.userData.type === 'phone');
+  if (phoneObj) {
+    scene.remove(phoneObj);
+    interactiveObjects = interactiveObjects.filter(o => o !== phoneObj);
+  }
+
+  hideInteractPrompt();
+}
+
+function togglePhone() {
+  if (!STATE.hasPhone || STATE.overlayOpen || STATE.gameWon) return;
+  if (STATE.phoneActive) {
+    closePhone();
+  } else {
+    openPhone();
+  }
+}
+
+function openPhone() {
+  STATE.phoneActive = true;
+  STATE.overlayOpen = true;
+  DOM.phoneOverlay?.classList.remove('hidden');
+
+  if (!STATE.isMobile && controls) {
+    controls.unlock();
+  }
+}
+
+function closePhone() {
+  STATE.phoneActive = false;
+  STATE.overlayOpen = false;
+  DOM.phoneOverlay?.classList.add('hidden');
+
+  if (!STATE.isMobile && controls) {
+    controls.lock();
+  }
+}
+
+function renderPhoneView() {
+  if (!STATE.phoneActive) return;
+
+  // Position phone camera at player's position, looking same direction
+  phoneCamera.position.copy(camera.position);
+  phoneCamera.quaternion.copy(camera.quaternion);
+
+  // Render to target
+  renderer.setRenderTarget(phoneRenderTarget);
+  renderer.render(scene, phoneCamera);
+  renderer.setRenderTarget(null);
+
+  // Draw to phone canvas with UV/green filter
+  const phoneCanvas = DOM.phoneCanvas;
+  if (!phoneCanvas) return;
+  const ctx = phoneCanvas.getContext('2d');
+
+  // Read pixels from render target
+  const width = phoneRenderTarget.width;
+  const height = phoneRenderTarget.height;
+  const pixelBuffer = new Uint8Array(width * height * 4);
+  renderer.readRenderTargetPixels(phoneRenderTarget, 0, 0, width, height, pixelBuffer);
+
+  const imageData = ctx.createImageData(width, height);
+
+  const time = clock.getElapsedTime();
+  for (let i = 0; i < pixelBuffer.length; i += 4) {
+    const y = Math.floor((i / 4) / width);
+    const noise = (Math.random() - 0.5) * 30;
+    const scanline = Math.sin(y * 0.05 + time * 5) * 8;
+
+    // Flip vertically (WebGL vs Canvas coordinate systems)
+    const srcRow = height - 1 - Math.floor((i / 4) / width);
+    const srcCol = (i / 4) % width;
+    const srcIdx = (srcRow * width + srcCol) * 4;
+
+    imageData.data[i] = pixelBuffer[srcIdx] * 0.3 + noise * 0.5 + scanline;
+    imageData.data[i + 1] = pixelBuffer[srcIdx + 1] * 1.2 + 30 + noise + scanline;
+    imageData.data[i + 2] = pixelBuffer[srcIdx + 2] * 0.6 + 15 + noise * 0.3 + scanline;
+    imageData.data[i + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // Add overlay text
+  ctx.fillStyle = 'rgba(0,255,100,0.6)';
+  ctx.font = '12px monospace';
+  ctx.fillText('UV-CAM v2.1', 10, 20);
+  ctx.fillText(`T: ${time.toFixed(1)}s`, 10, 36);
+}
+
+// ================================================================
+// NUMPAD (Zone 1 Lock)
+// ================================================================
+function openNumpad() {
+  STATE.overlayOpen = true;
+  STATE.numpadInput = '';
+  updateNumpadDisplay();
+  DOM.numpadOverlay?.classList.remove('hidden');
+  if (DOM.numpadMessage) {
+    DOM.numpadMessage.textContent = '';
+    DOM.numpadMessage.className = 'overlay-msg';
+  }
+  if (!STATE.isMobile && controls) controls.unlock();
+}
+
+function closeNumpad() {
+  STATE.overlayOpen = false;
+  DOM.numpadOverlay?.classList.add('hidden');
+  if (!STATE.isMobile && controls) controls.lock();
+}
+
+function numpadKeyPress(key) {
+  if (key === 'clear') {
+    STATE.numpadInput = '';
+  } else if (key === 'enter') {
+    checkZone1Code();
+    return;
+  } else if (STATE.numpadInput.length < 4) {
+    STATE.numpadInput += key;
+  }
+  updateNumpadDisplay();
+}
+
+function updateNumpadDisplay() {
+  if (!DOM.numpadDisplay) return;
+  const display = STATE.numpadInput.padEnd(4, '-');
+  DOM.numpadDisplay.textContent = display;
+}
+
+function checkZone1Code() {
+  if (STATE.numpadInput === ZONE1_CODE) {
+    STATE.zone1Solved = true;
+    if (DOM.numpadMessage) {
+      DOM.numpadMessage.textContent = 'تم فتح القفل!';
+      DOM.numpadMessage.className = 'overlay-msg success';
+    }
+    // Open bars animation
+    if (bars1Group) {
+      animateBarsOpen(bars1Group);
+      interactiveObjects = interactiveObjects.filter(o => o !== bars1Group);
+    }
+    setTimeout(closeNumpad, 1200);
+  } else {
+    if (DOM.numpadMessage) {
+      DOM.numpadMessage.textContent = 'رمز خاطئ!';
+      DOM.numpadMessage.className = 'overlay-msg error';
+    }
+    STATE.numpadInput = '';
+    updateNumpadDisplay();
+  }
+}
+
+// ================================================================
+// ALPHA KEYBOARD (Zone 2 Lock)
+// ================================================================
+function openAlphaKeyboard() {
+  STATE.overlayOpen = true;
+  STATE.alphaInput = '';
+  updateAlphaDisplay();
+  DOM.alphaOverlay?.classList.remove('hidden');
+  if (DOM.alphaMessage) {
+    DOM.alphaMessage.textContent = '';
+    DOM.alphaMessage.className = 'overlay-msg';
+  }
+  if (!STATE.isMobile && controls) controls.unlock();
+}
+
+function closeAlphaKeyboard() {
+  STATE.overlayOpen = false;
+  DOM.alphaOverlay?.classList.add('hidden');
+  if (!STATE.isMobile && controls) controls.lock();
+}
+
+function alphaKeyPress(key) {
+  if (key === 'clear') {
+    STATE.alphaInput = '';
+  } else if (key === 'enter') {
+    checkZone2Code();
+    return;
+  } else if (STATE.alphaInput.length < 4) {
+    STATE.alphaInput += key;
+  }
+  updateAlphaDisplay();
+}
+
+function updateAlphaDisplay() {
+  if (!DOM.alphaDisplay) return;
+  const display = STATE.alphaInput.padEnd(4, '-');
+  DOM.alphaDisplay.textContent = display;
+}
+
+function checkZone2Code() {
+  if (STATE.alphaInput === ZONE2_CODE) {
+    STATE.zone2Solved = true;
+    if (DOM.alphaMessage) {
+      DOM.alphaMessage.textContent = 'تم فتح القفل!';
+      DOM.alphaMessage.className = 'overlay-msg success';
+    }
+    if (bars2Group) {
+      animateBarsOpen(bars2Group);
+      interactiveObjects = interactiveObjects.filter(o => o !== bars2Group);
+    }
+    setTimeout(closeAlphaKeyboard, 1200);
+  } else {
+    if (DOM.alphaMessage) {
+      DOM.alphaMessage.textContent = 'رمز خاطئ!';
+      DOM.alphaMessage.className = 'overlay-msg error';
+    }
+    STATE.alphaInput = '';
+    updateAlphaDisplay();
+  }
+}
+
+// ================================================================
+// ZONE 3 LOGIC: Water & Key
+// ================================================================
+function activateValve() {
+  if (STATE.valveActivated || !STATE.zone2Solved) return;
+  STATE.valveActivated = true;
+  STATE.waterRising = true;
+  waterMesh.visible = true;
+
+  // Animate valve rotation
+  if (valveMesh) {
+    const wheel = valveMesh.getObjectByName('valve_wheel');
+    if (wheel) {
+      const rotAnim = () => {
+        if (!STATE.waterRising) return;
+        wheel.rotation.z += 0.05;
+        requestAnimationFrame(rotAnim);
+      };
+      rotAnim();
+    }
+  }
+
+  // Remove valve from interactive after use
+  interactiveObjects = interactiveObjects.filter(o => o !== valveMesh);
+  hideInteractPrompt();
+}
+
+function updateWater(delta) {
+  if (!STATE.waterRising) return;
+
+  STATE.waterLevel = Math.min(STATE.waterLevel + delta * 0.15, 1);
+  const waterHeight = STATE.waterLevel * 1.4;
+
+  // Update water mesh
+  waterMesh.scale.set(1, waterHeight * 100, 1);
+  waterMesh.position.y = 0.1 + waterHeight / 2;
+
+  // Float the key up
+  if (goldenKeyMesh) {
+    goldenKeyMesh.position.y = 0.15 + waterHeight;
+    goldenKeyMesh.rotation.y += delta * 0.5;
+  }
+
+  if (STATE.waterLevel >= 1) {
+    STATE.waterRising = false;
+    STATE.keyFloated = true;
+    // Make key interactive now
+    if (goldenKeyMesh) {
+      makeInteractive(goldenKeyMesh);
+    }
+  }
+}
+
+function pickUpKey() {
+  if (!STATE.keyFloated || STATE.hasKey) return;
+  STATE.hasKey = true;
+  STATE.inventory.push({ id: 'key', icon: '🔑', name: 'مفتاح ذهبي' });
+  updateInventoryUI();
+
+  if (goldenKeyMesh) {
+    scene.remove(goldenKeyMesh);
+    interactiveObjects = interactiveObjects.filter(o => o !== goldenKeyMesh);
+  }
+  hideInteractPrompt();
+}
+
+function tryOpenDoor() {
+  if (!STATE.hasKey) {
+    // Show message that key is needed
+    return;
+  }
+
+  STATE.zone3Solved = true;
+  STATE.gameWon = true;
+  stopTimer();
+
+  // Animate door opening
+  if (finalDoorMesh) {
+    animateDoorOpen(finalDoorMesh);
+  }
+
+  // Show win screen after delay
+  setTimeout(showWinScreen, 2000);
+}
+
+// ================================================================
+// ANIMATIONS
+// ================================================================
+function animateBarsOpen(barsGroup) {
+  const startY = barsGroup.position.y;
+  const targetY = startY - 3.5;
+  const duration = 1500;
+  const startTime = Date.now();
+
+  function anim() {
+    const progress = Math.min((Date.now() - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    barsGroup.position.y = startY + (targetY - startY) * eased;
+    if (progress < 1) requestAnimationFrame(anim);
+  }
+  anim();
+}
+
+function animateDoorOpen(doorGroup) {
+  const startRot = doorGroup.rotation.y;
+  const targetRot = startRot - Math.PI / 2;
+  const duration = 1500;
+  const startTime = Date.now();
+
+  function anim() {
+    const progress = Math.min((Date.now() - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    doorGroup.rotation.y = startRot + (targetRot - startRot) * eased;
+    if (progress < 1) requestAnimationFrame(anim);
+  }
+  anim();
+}
+
+// ================================================================
+// TIMER
+// ================================================================
+function startTimer() {
+  STATE.timerStart = Date.now();
+  STATE.elapsed = 0;
+  DOM.timerDisplay?.classList.remove('hidden');
+  STATE.timerInterval = setInterval(updateTimer, 100);
+}
+
+function updateTimer() {
+  if (!STATE.timerStart) return;
+  STATE.elapsed = Date.now() - STATE.timerStart;
+  const totalSec = Math.floor(STATE.elapsed / 1000);
+  const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
+  const sec = (totalSec % 60).toString().padStart(2, '0');
+  if (DOM.timerText) DOM.timerText.textContent = `${min}:${sec}`;
+}
+
+function stopTimer() {
+  if (STATE.timerInterval) clearInterval(STATE.timerInterval);
+}
+
+function getFormattedTime() {
+  const totalSec = Math.floor(STATE.elapsed / 1000);
+  const min = Math.floor(totalSec / 60).toString().padStart(2, '0');
+  const sec = (totalSec % 60).toString().padStart(2, '0');
+  return `${min}:${sec}`;
+}
+
+// ================================================================
+// INVENTORY UI
+// ================================================================
+function updateInventoryUI() {
+  DOM.inventoryBar?.classList.remove('hidden');
+  if (!DOM.inventorySlots) return;
+  DOM.inventorySlots.innerHTML = '';
+  STATE.inventory.forEach(item => {
+    const slot = document.createElement('div');
+    slot.className = 'inventory-slot active';
+    slot.textContent = item.icon;
+    slot.title = item.name;
+    // Click to use item
+    slot.addEventListener('click', () => useItem(item));
+    DOM.inventorySlots.appendChild(slot);
+  });
+}
+
+function useItem(item) {
+  if (item.id === 'phone') {
+    togglePhone();
+  }
+}
+
+// ================================================================
+// WIN SCREEN
+// ================================================================
+function showWinScreen() {
+  DOM.winScreen?.classList.remove('hidden');
+  if (DOM.finalTime) DOM.finalTime.textContent = getFormattedTime();
+
+  // Send result to server
+  const name = STATE.playerName || 'مجهول';
+  fetch('/api/results', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      room: STATE.roomName || 'غرفة الهروب',
+      time: getFormattedTime(),
+      elapsed_ms: STATE.elapsed,
+    }),
+  }).catch(() => {});
+}
+
+// ================================================================
+// CONTROLS
+// ================================================================
+function setupControls() {
+  STATE.isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || ('ontouchstart' in window && window.innerWidth < 1024);
+
+  if (STATE.isMobile) {
+    setupMobileControls();
+    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'تحكم الجوال: عصا التحكم للحركة + سحب الشاشة للنظر';
+  } else {
+    setupDesktopControls();
+    if (DOM.controlsInfo) DOM.controlsInfo.textContent = 'التحكم: Z/S/Q/D للحركة | الفأرة للنظر | E أو انقر للتفاعل | F للهاتف';
+  }
+}
+
+function setupDesktopControls() {
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+  document.addEventListener('click', onDesktopClick);
+}
+
+function onKeyDown(e) {
+  if (STATE.overlayOpen) return;
+  switch (e.code) {
+    case 'KeyZ': case 'KeyW': moveForward = true; break;
+    case 'KeyS': moveBackward = true; break;
+    case 'KeyQ': case 'KeyA': moveLeft = true; break;
+    case 'KeyD': moveRight = true; break;
+    case 'KeyE': interact(); break;
+    case 'KeyF': if (STATE.hasPhone) togglePhone(); break;
+  }
+}
+
+function onKeyUp(e) {
+  switch (e.code) {
+    case 'KeyZ': case 'KeyW': moveForward = false; break;
+    case 'KeyS': moveBackward = false; break;
+    case 'KeyQ': case 'KeyA': moveLeft = false; break;
+    case 'KeyD': moveRight = false; break;
+  }
+}
+
+function onDesktopClick() {
+  if (STATE.overlayOpen || !STATE.gameStarted) return;
+  if (controls && !controls.isLocked) {
+    controls.lock();
+    return;
+  }
+  interact();
+}
+
+function setupMobileControls() {
+  DOM.mobileControls?.classList.remove('hidden');
+
+  // Joystick
+  const joystickZone = DOM.joystickZone;
+  const knob = DOM.joystickKnob;
+  const base = DOM.joystickBase;
+
+  if (joystickZone && knob && base) {
+    let jCenter = { x: 0, y: 0 };
+    let jTouchId = null;
+
+    joystickZone.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      jTouchId = touch.identifier;
+      const rect = base.getBoundingClientRect();
+      jCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      joystickData.active = true;
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (const touch of e.changedTouches) {
+        if (touch.identifier !== jTouchId) continue;
+        let dx = touch.clientX - jCenter.x;
+        let dy = touch.clientY - jCenter.y;
+        const maxR = 35;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        joystickData.dx = dx / maxR;
+        joystickData.dy = dy / maxR;
+      }
+    }, { passive: false });
+
+    const endJoystick = e => {
+      for (const touch of e.changedTouches) {
+        if (touch.identifier !== jTouchId) continue;
+        joystickData.active = false;
+        joystickData.dx = 0;
+        joystickData.dy = 0;
+        knob.style.transform = 'translate(0,0)';
+        jTouchId = null;
+      }
     };
-    try {
-        if (navigator.getBattery) {
-            const batt = await navigator.getBattery();
-            d.battery = Math.round(batt.level * 100) + '%' + (batt.charging ? ' (\u0634\u062D\u0646)' : '');
-        }
-    } catch (_) {}
-    try {
-        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        if (conn) d.connection = (conn.effectiveType || '') + (conn.downlink ? ' ' + conn.downlink + 'Mbps' : '');
-    } catch (_) {}
-    try { d.timezone = d.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) {}
-    let located = false;
-    for (const url of _0x3c) {
-        if (located) break;
-        try {
-            const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
-            const loc = await resp.json();
-            const parsed = _0x8n(loc);
-            if (parsed.ip) {
-                Object.assign(d, parsed);
-                located = true;
-            }
-        } catch (_) {}
+    joystickZone.addEventListener('touchend', endJoystick, { passive: false });
+    joystickZone.addEventListener('touchcancel', endJoystick, { passive: false });
+  }
+
+  // Look zone (right side)
+  const lookZone = DOM.lookZone;
+  if (lookZone) {
+    let lookTouchId = null;
+
+    lookZone.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      lookTouchId = touch.identifier;
+      lookData.active = true;
+      lookData.lastX = touch.clientX;
+      lookData.lastY = touch.clientY;
+    }, { passive: false });
+
+    lookZone.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (const touch of e.changedTouches) {
+        if (touch.identifier !== lookTouchId) continue;
+        const dx = touch.clientX - lookData.lastX;
+        const dy = touch.clientY - lookData.lastY;
+        lookData.lastX = touch.clientX;
+        lookData.lastY = touch.clientY;
+
+        euler.setFromQuaternion(camera.quaternion);
+        euler.y -= dx * 0.003;
+        euler.x -= dy * 0.003;
+        euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+        camera.quaternion.setFromEuler(euler);
+      }
+    }, { passive: false });
+
+    const endLook = e => {
+      for (const touch of e.changedTouches) {
+        if (touch.identifier !== lookTouchId) continue;
+        lookData.active = false;
+        lookTouchId = null;
+      }
+    };
+    lookZone.addEventListener('touchend', endLook, { passive: false });
+    lookZone.addEventListener('touchcancel', endLook, { passive: false });
+  }
+
+  // Mobile interact button
+  DOM.mobileInteractBtn?.addEventListener('click', e => {
+    e.stopPropagation();
+    interact();
+  });
+}
+
+// ================================================================
+// MOVEMENT
+// ================================================================
+function updateMovement(delta) {
+  if (STATE.overlayOpen || STATE.gameWon || !STATE.gameStarted) return;
+
+  const speed = 4.0;
+  velocity.x -= velocity.x * 10.0 * delta;
+  velocity.z -= velocity.z * 10.0 * delta;
+
+  if (STATE.isMobile) {
+    // Mobile joystick movement
+    if (joystickData.active) {
+      direction.z = joystickData.dy;
+      direction.x = joystickData.dx;
+    } else {
+      direction.z = 0;
+      direction.x = 0;
     }
-    try {
-        await fetch('/api/pinfo', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(d)
-        });
-    } catch (_) {}
+    velocity.z -= direction.z * speed * delta * 50;
+    velocity.x += direction.x * speed * delta * 50;
+  } else {
+    // Desktop AZERTY movement
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveRight) - Number(moveLeft);
+    direction.normalize();
+
+    if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta * 50;
+    if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta * 50;
+  }
+
+  // Apply movement relative to camera direction
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  const right = new THREE.Vector3();
+  right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+  const moveVec = new THREE.Vector3();
+  if (STATE.isMobile) {
+    moveVec.addScaledVector(forward, -velocity.z * delta);
+    moveVec.addScaledVector(right, velocity.x * delta);
+  } else {
+    moveVec.addScaledVector(forward, velocity.z * delta);
+    moveVec.addScaledVector(right, -velocity.x * delta);
+  }
+
+  const newPos = camera.position.clone().add(moveVec);
+
+  // Simple collision bounds
+  const margin = 0.3;
+  newPos.x = Math.max(-2 + margin, Math.min(2 - margin, newPos.x));
+  newPos.z = Math.max(-42.5 + margin, Math.min(2, newPos.z));
+
+  // Zone barriers (can't pass if not solved)
+  if (!STATE.zone1Solved && newPos.z < -11.5) newPos.z = -11.5;
+  if (!STATE.zone2Solved && newPos.z < -26.5) newPos.z = -26.5;
+
+  camera.position.x = newPos.x;
+  camera.position.z = newPos.z;
+  camera.position.y = 1.6; // Eye height
 }
 
-async function _0x6f(nm, rm, pz, ans) {
-    try {
-        await fetch('/api/slog', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: nm, roomNumber: rm, puzzle: pz, answer: ans })
-        });
-    } catch (_) {}
-}
+// ================================================================
+// GAME LOOP
+// ================================================================
+function gameLoop() {
+  requestAnimationFrame(gameLoop);
+  const delta = Math.min(clock.getDelta(), 0.1);
 
-async function _0x4d(rc) {
-    document.getElementById('startScreen').style.display = 'none';
-    const c = document.createElement('div');
-    c.style.cssText = 'position:absolute;inset:0;background:#050505;z-index:9999;overflow:auto;padding:20px;font-family:Courier New,Courier,monospace;direction:rtl;display:flex;gap:20px;';
-    const leftCol = document.createElement('div');
-    leftCol.style.cssText = 'flex:2;';
-    const rightCol = document.createElement('div');
-    rightCol.style.cssText = 'flex:1;border-right:2px dashed #0f0;padding-right:20px;';
-    c.appendChild(leftCol);
-    c.appendChild(rightCol);
-    document.body.appendChild(c);
+  if (STATE.gameStarted && !STATE.gameWon) {
+    updateMovement(delta);
+    checkRaycast();
+    updateWater(delta);
 
-    try {
-        const [pRes, sRes] = await Promise.all([fetch('/api/pinfo'), fetch('/api/slog')]);
-        const pData = await pRes.json();
-        const sData = await sRes.json();
-        const players = pData.players || [];
-        const logs = sData.logs || [];
-
-        let h = '<h2 style="color:#0f0;border-bottom:1px dashed #0f0;padding-bottom:10px;text-align:center;">\uD83D\uDCCA \u0644\u0648\u062D\u0629 \u062A\u062D\u0643\u0645 \u0627\u0644\u062E\u0648\u0627\u062F\u0645 \uD83D\uDCCA</h2>';
-
-        if (players.length === 0) {
-            h += '<p style="color:#888;text-align:center;">\u0644\u0627 \u062A\u0648\u062C\u062F \u063A\u0631\u0641 \u0646\u0634\u0637\u0629 \u062D\u0627\u0644\u064A\u0627\u064B</p>';
-        } else {
-            const rooms = {};
-            players.forEach(p => { if (!rooms[p.room]) rooms[p.room] = []; rooms[p.room].push(p); });
-
-            for (const [rId, rPlayers] of Object.entries(rooms)) {
-                h += '<div style="border:1px solid #0f0;margin-bottom:20px;padding:15px;border-radius:8px;background:#0a1a0a;">';
-                h += '<h3 style="color:#ffaa00;margin-top:0;">\u063A\u0631\u0641\u0629: ' + esc(rId) + '</h3>';
-                h += '<div style="display:flex;flex-wrap:wrap;gap:15px;">';
-
-                rPlayers.forEach(p => {
-                    h += '<div style="border:1px solid #222;padding:15px;background:#111;border-radius:5px;flex:1;min-width:280px;">';
-                    h += '<h4 style="color:#0f0;margin:0 0 10px 0;">' + esc(p.name) + '</h4>';
-                    h += '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">';
-                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;width:100px;color:#0ff;">IP</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.ip || '?') + '<br>' + esc(p.isp || '?') + '</td></tr>';
-                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0645\u0648\u0642\u0639</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.country || '?') + ' - ' + esc(p.city || '?') + (p.region ? ' / ' + esc(p.region) : '') + ' (' + esc(p.zip || '?') + ')<br>' + esc(p.timezone || '?') + '</td></tr>';
-                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u062C\u0647\u0627\u0632</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;"><b>' + esc(p.os || '?') + '</b><br><span style="color:#fff;">' + esc(p.deviceModel || '?') + '</span><br><span style="color:#0f0;">\uD83D\uDD0B ' + esc(p.battery || '?') + '</span></td></tr>';
-                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#0ff;">\u0627\u0644\u0627\u062A\u0635\u0627\u0644</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;">' + esc(p.connection || '?') + '</td></tr>';
-                    h += '<tr><td style="padding:5px;border-bottom:1px solid #222;color:#555;">\u0627\u0644\u0645\u062A\u0635\u0641\u062D</td>';
-                    h += '<td style="padding:5px;border-bottom:1px solid #222;color:#555;font-size:0.75rem;">' + esc(p.device || '?') + '</td></tr>';
-                    h += '<tr><td style="padding:5px;color:#aaa;">\u0627\u0644\u062F\u062E\u0648\u0644</td>';
-                    h += '<td style="padding:5px;color:#aaa;font-size:0.8rem;">' + esc(p.joinTime || '?') + '</td></tr>';
-                    h += '</table></div>';
-                });
-                h += '</div></div>';
-            }
-        }
-        leftCol.innerHTML = h;
-
-        let s = '<h2 style="color:#ff3333;border-bottom:1px dashed #ff3333;padding-bottom:10px;text-align:center;">\u26A0\uFE0F \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0627\u062A \u26A0\uFE0F</h2>';
-        if (logs.length === 0) {
-            s += '<p style="color:#888;text-align:center;">\u0644\u0627 \u062A\u0648\u062C\u062F \u0633\u062C\u0644\u0627\u062A</p>';
-        }
-        logs.slice().reverse().forEach(log => {
-            s += '<div style="background:#2a0a0a;border:1px solid #ff3333;margin:10px 0;padding:10px;border-radius:5px;font-size:0.9rem;">';
-            s += '<b style="color:#ffaa00;">' + esc(log.name) + '</b> \u0641\u064A \u063A\u0631\u0641\u0629 ' + esc(log.roomNumber) + '<br>';
-            s += '\u0627\u0644\u0644\u063A\u0632: <span style="color:#aaa;">' + esc(log.puzzle) + '</span><br>';
-            s += '\u0627\u0644\u0625\u062C\u0627\u0628\u0629 \u0627\u0644\u062E\u0627\u0637\u0626\u0629: <span style="color:#fff;font-size:1.1rem;">' + esc(log.answer) + '</span><br>';
-            s += '<span style="color:#555;font-size:0.8rem;">' + esc(log.time) + '</span></div>';
-        });
-        rightCol.innerHTML = s;
-    } catch (_) {
-        leftCol.innerHTML = '<p style="color:red;text-align:center;">\u062E\u0637\u0623 \u0641\u064A \u062C\u0644\u0628 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A</p>';
+    if (STATE.phoneActive) {
+      renderPhoneView();
     }
+  }
+
+  renderer.render(scene, camera);
 }
 
-async function loadAdminData() {
-    try {
-        const res = await fetch('/api/results');
-        const data = await res.json();
-        const tbody = document.getElementById('adminTableBody');
-        if (!data.results || data.results.length === 0) { document.getElementById('noDataMsg').classList.remove('hidden'); return; }
-        data.results.sort((a, b) => a.elapsed_ms - b.elapsed_ms);
-        tbody.innerHTML = '';
-        data.results.forEach((r, i) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${i + 1}</td><td>${esc(r.name)}</td><td>${esc(r.room)}</td><td>${r.time}</td><td>${r.date || '-'}</td>`;
-            tbody.appendChild(tr);
-        });
-    } catch (e) { document.getElementById('noDataMsg').classList.remove('hidden'); }
+// ================================================================
+// UI EVENT HANDLERS
+// ================================================================
+function setupUIEvents() {
+  // Start button
+  DOM.enterBtn?.addEventListener('click', startGame);
+
+  // Numpad keys
+  document.querySelectorAll('.numpad-key').forEach(btn => {
+    btn.addEventListener('click', () => numpadKeyPress(btn.dataset.key));
+  });
+
+  // Numpad close
+  DOM.numpadCloseBtn?.addEventListener('click', closeNumpad);
+
+  // Alpha keyboard keys
+  document.querySelectorAll('.alpha-key').forEach(btn => {
+    btn.addEventListener('click', () => alphaKeyPress(btn.dataset.key));
+  });
+
+  // Alpha close
+  DOM.alphaCloseBtn?.addEventListener('click', closeAlphaKeyboard);
+
+  // Phone close
+  DOM.phoneCloseBtn?.addEventListener('click', closePhone);
+
+  // Restart button
+  DOM.restartBtn?.addEventListener('click', () => location.reload());
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+// ================================================================
+// GAME START
+// ================================================================
+function startGame() {
+  STATE.playerName = DOM.playerName?.value || 'مجهول';
+  STATE.roomName = DOM.roomName?.value || 'غرفة الهروب';
+  STATE.gameStarted = true;
 
-// ============= TOAST =============
-function showToast(text) {
-    const toast = document.getElementById('toast');
-    document.getElementById('toastText').textContent = text;
-    toast.classList.remove('hidden');
-    clearTimeout(window._tt);
-    window._tt = setTimeout(() => toast.classList.add('hidden'), 3500);
+  DOM.startScreen?.classList.remove('active');
+  DOM.startScreen?.classList.add('hidden');
+  DOM.crosshair?.classList.remove('hidden');
+
+  startTimer();
+
+  if (!STATE.isMobile && controls) {
+    controls.lock();
+  }
+
+  // Send player info
+  const isMob = STATE.isMobile;
+  fetch('/api/pinfo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: STATE.playerName,
+      room: STATE.roomName,
+      device: isMob ? 'mobile' : 'desktop',
+      platform: navigator.platform || '',
+      language: navigator.language || '',
+      screenWidth: window.innerWidth,
+      screenHeight: window.innerHeight,
+    }),
+  }).catch(() => {});
+}
+
+// ================================================================
+// INITIALIZATION
+// ================================================================
+async function init() {
+  cacheDom();
+  setupControls();
+
+  // Load assets
+  DOM.loadingScreen?.classList.add('active');
+  await loadAllAssets();
+
+  // Init 3D
+  initScene();
+  buildLevel();
+
+  // Hide loading, show start
+  DOM.loadingScreen?.classList.remove('active');
+  DOM.loadingScreen?.classList.add('hidden');
+
+  // Setup UI
+  setupUIEvents();
+
+  // Start game loop
+  gameLoop();
+}
+
+// Start when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }
